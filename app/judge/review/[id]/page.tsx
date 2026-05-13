@@ -65,7 +65,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
       setAssignment(res.assignment);
       setCriteria((res.criteria as any) || []);
-      setCurrentTeam(res.team);
+      setCurrentTeam(res.team || null);
 
       // Initialize scores
       const initialScores: Record<string, number> = {};
