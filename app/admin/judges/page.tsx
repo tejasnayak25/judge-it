@@ -10,11 +10,15 @@ import {
   Shield, 
   Calendar,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Upload,
+  FileText,
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import ActionMenu from '@/components/admin/ActionMenu';
-import { createJudgeAction, getJudgesAction, deleteJudgeAction } from './actions';
+import { createJudgeAction, getJudgesAction, deleteJudgeAction, bulkCreateJudgesAction, syncJudgesAction } from './actions';
 
 interface Profile {
   id: string;
@@ -28,6 +32,7 @@ export default function JudgesPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -69,6 +74,78 @@ export default function JudgesPage() {
     setIsSubmitting(false);
   }
 
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsSubmitting(true);
+    setFormError(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result as string;
+        if (!content) return;
+
+        const lines = content.trim().split('\n');
+        const startIdx = lines[0].toLowerCase().includes('name') ? 1 : 0;
+
+        const judgesToInsert = lines.slice(startIdx).map((line, index) => {
+          const regex = /(?!\s*$)\s*(?:"([^"]*)"|([^,]*))\s*(?:,|$)/g;
+          const parts: string[] = [];
+          let match;
+          while ((match = regex.exec(line)) !== null) {
+            parts.push(match[1] || match[2] || "");
+          }
+
+          if (parts.length < 3) return null;
+
+          const [full_name, email, password] = parts;
+          if (!full_name || !email || !password) {
+            throw new Error(`Line ${index + 1 + startIdx} is invalid. Format: Judge Name, Email, Password`);
+          }
+          return { full_name, email, password };
+        }).filter(j => j !== null);
+
+        const result = await bulkCreateJudgesAction(judgesToInsert);
+
+        if (result.success) {
+          setIsImportModalOpen(false);
+          fetchJudges();
+        } else {
+          setFormError(result.error || 'Bulk import failed');
+        }
+      } catch (error: any) {
+        setFormError(error.message);
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  const downloadTemplate = () => {
+    const csvContent = "data:text/csv;charset=utf-8,JUDGE NAME,EMAIL,PASSWORD\nDr. Smith,smith@example.com,JudgePassword123\nProf. Brown,brown@example.com,SecurePass456";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "judges_template.csv");
+    document.body.appendChild(link);
+    link.click();
+  };
+
+  async function handleSync() {
+    setIsSubmitting(true);
+    const res = await syncJudgesAction();
+    if (res.success) {
+      alert(res.message);
+      fetchJudges();
+    } else {
+      setFormError(res.error || 'Sync failed');
+    }
+    setIsSubmitting(false);
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -76,14 +153,83 @@ export default function JudgesPage() {
           <h1 className="text-3xl font-bold font-outfit tracking-tight">Judges</h1>
           <p className="text-muted-foreground">Manage and register competition judges.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/20"
-        >
-          <Plus className="w-5 h-5" />
-          Register Judge
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSync}
+            disabled={isSubmitting}
+            className="flex items-center gap-2 px-4 py-3 bg-muted hover:bg-border text-foreground font-semibold rounded-xl transition-all active:scale-95 border border-border"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSubmitting ? 'animate-spin' : ''}`} />
+            Sync Accounts
+          </button>
+          <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-muted hover:bg-border text-foreground font-semibold rounded-xl transition-all active:scale-95 border border-border"
+          >
+            <Upload className="w-5 h-5" />
+            Import CSV
+          </button>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/20"
+          >
+            <Plus className="w-5 h-5" />
+            Register Judge
+          </button>
+        </div>
       </div>
+
+      {/* Import Modal */}
+      <Modal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        title="Bulk Import Judges"
+      >
+        <div className="space-y-6">
+          <div className="p-10 border-2 border-dashed border-border rounded-[2rem] bg-muted/30 flex flex-col items-center justify-center gap-4 text-center group hover:border-primary/50 transition-all relative overflow-hidden">
+            <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center text-primary group-hover:scale-110 transition-transform shadow-inner">
+              {isSubmitting ? <Loader2 className="w-10 h-10 animate-spin" /> : <Upload className="w-10 h-10" />}
+            </div>
+            <div className="space-y-1">
+              <p className="font-bold text-lg">Upload CSV File</p>
+              <p className="text-sm text-muted-foreground">Drag and drop or click to browse</p>
+            </div>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              disabled={isSubmitting}
+              className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div className="p-4 bg-primary/5 border border-primary/10 rounded-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                CSV Format Required
+              </h4>
+              <button 
+                onClick={downloadTemplate}
+                className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2 py-1 rounded"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Download Template
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Format: <code className="text-primary font-bold">JUDGE NAME, EMAIL, PASSWORD</code>
+            </p>
+          </div>
+
+          {formError && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive font-medium flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              {formError}
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <Modal 
         isOpen={isModalOpen} 

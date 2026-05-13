@@ -44,6 +44,7 @@ interface Team {
   id: string;
   team_name: string;
   project_title: string;
+  slot_number: string;
 }
 
 export default function AssignmentsPage() {
@@ -60,6 +61,7 @@ export default function AssignmentsPage() {
   const [selectedJudge2, setSelectedJudge2] = useState('');
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const [filterPrefix, setFilterPrefix] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -73,7 +75,7 @@ export default function AssignmentsPage() {
         getTeamsAction()
       ]);
 
-      if (assignmentsRes.success) setAssignments(assignmentsRes.data || []);
+      if (assignmentsRes.success) setAssignments(assignmentsRes.data as Assignment[] || []);
       if (judgesRes.success) setJudges(judgesRes.data || []);
       if (teamsRes.success) setTeams(teamsRes.data || []);
       
@@ -93,8 +95,8 @@ export default function AssignmentsPage() {
       setFormError('Judge 1 and Judge 2 must be different people.');
       return;
     }
-    if (selectedTeams.length !== 10) {
-      setFormError(`Assignment requires exactly 10 teams. You have selected ${selectedTeams.length}.`);
+    if (selectedTeams.length === 0) {
+      setFormError('Please select at least one team.');
       return;
     }
 
@@ -129,7 +131,7 @@ export default function AssignmentsPage() {
     setSelectedTeams(prev => 
       prev.includes(teamId) 
         ? prev.filter(id => id !== teamId) 
-        : (prev.length < 10 ? [...prev, teamId] : prev)
+        : [...prev, teamId]
     );
   };
 
@@ -215,14 +217,53 @@ export default function AssignmentsPage() {
 
           {/* Team Selection Section */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold uppercase tracking-widest text-primary flex items-center gap-2">
-                <Trophy className="w-4 h-4" />
-                2. Select 10 Teams
-              </h4>
-              <span className={`px-3 py-1 rounded-full text-xs font-black ${selectedTeams.length === 10 ? 'bg-green-500 text-white' : 'bg-primary/10 text-primary'}`}>
-                {selectedTeams.length} / 10
-              </span>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <h4 className="text-sm font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                  <Trophy className="w-4 h-4" />
+                  2. Select 10 Teams
+                </h4>
+                <span className={`px-3 py-1 rounded-full text-xs font-black shrink-0 ${selectedTeams.length === 10 ? 'bg-green-500 text-white' : 'bg-primary/10 text-primary'}`}>
+                  {selectedTeams.length} / 10
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 p-2 bg-muted/30 rounded-2xl border border-border">
+                <div className="flex gap-1 border-r border-border pr-2 mr-1">
+                  {['F', 'S', 'T'].map(pref => (
+                    <button
+                      key={pref}
+                      onClick={() => setFilterPrefix(pref)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${filterPrefix === pref ? 'bg-primary text-primary-foreground shadow-lg' : 'hover:bg-muted text-muted-foreground'}`}
+                    >
+                      {pref}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setFilterPrefix('')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${filterPrefix === '' ? 'bg-primary text-primary-foreground shadow-lg' : 'hover:bg-muted text-muted-foreground'}`}
+                  >
+                    ALL
+                  </button>
+                </div>
+                
+                <div className="flex-1 min-w-[200px]">
+                  <CustomSelect 
+                    options={Array.from(new Set(teams.map(t => t.slot_number).filter(s => !filterPrefix || s.startsWith(filterPrefix))))
+                      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+                      .map(slot => ({ id: slot, label: `Slot ${slot}` }))
+                    }
+                    value=""
+                    onChange={(slot) => {
+                      const teamsInSlot = teams.filter(t => t.slot_number === slot).map(t => t.id);
+                      setSelectedTeams(teamsInSlot);
+                      setFormError(null);
+                    }}
+                    placeholder={`Select ${filterPrefix || ''} Slot...`}
+                    icon={<ClipboardList className="w-4 h-4" />}
+                  />
+                </div>
+              </div>
             </div>
 
             {teams.length === 0 ? (
@@ -231,8 +272,10 @@ export default function AssignmentsPage() {
                 <p className="text-sm font-medium text-muted-foreground">No teams available to assign.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2 p-4 bg-muted/20 rounded-3xl border border-border">
-                {teams.map(team => (
+              <div className="grid grid-cols-1 gap-2 p-4 bg-muted/20 rounded-3xl border border-border overflow-y-auto max-h-[400px] custom-scrollbar">
+                {teams
+                  .filter(t => !filterPrefix || t.slot_number.startsWith(filterPrefix))
+                  .map(team => (
                   <div 
                     key={team.id}
                     onClick={() => toggleTeamSelection(team.id)}
@@ -247,11 +290,18 @@ export default function AssignmentsPage() {
                     }`}>
                       {selectedTeams.includes(team.id) && <CheckCircle2 className="w-4 h-4 text-primary-foreground" />}
                     </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className={`font-bold transition-colors ${selectedTeams.includes(team.id) ? 'text-primary' : ''}`}>
-                        {team.project_title}
+                    <div className="flex-1 flex items-center justify-between gap-4 min-w-0">
+                      <div className="flex flex-col min-w-0">
+                        <span className={`font-bold transition-colors truncate ${selectedTeams.includes(team.id) ? 'text-primary' : ''}`}>
+                          {team.project_title}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider truncate">{team.team_name}</span>
+                      </div>
+                      <span className={`px-2 py-1 rounded-lg text-[10px] font-black font-mono border ${
+                        selectedTeams.includes(team.id) ? 'bg-primary/20 border-primary text-primary' : 'bg-muted border-border text-muted-foreground'
+                      }`}>
+                        {team.slot_number}
                       </span>
-                      <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{team.team_name}</span>
                     </div>
                   </div>
                 ))}
@@ -269,18 +319,18 @@ export default function AssignmentsPage() {
           <div className="pt-2">
             <button 
               onClick={handleCreateAssignment}
-              disabled={isSubmitting || selectedTeams.length !== 10 || !selectedJudge1 || !selectedJudge2}
+              disabled={isSubmitting || selectedTeams.length === 0 || !selectedJudge1 || !selectedJudge2}
               className="w-full py-5 px-6 bg-primary text-primary-foreground font-black rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-3 shadow-2xl shadow-primary/30 text-lg uppercase tracking-wider"
             >
               {isSubmitting ? (
                 <Loader2 className="w-6 h-6 animate-spin" />
-              ) : selectedTeams.length !== 10 ? (
-                <>Select 10 Teams ({selectedTeams.length}/10)</>
+              ) : selectedTeams.length === 0 ? (
+                <>Select Teams</>
               ) : !selectedJudge1 || !selectedJudge2 ? (
                 <>Assign Both Judges</>
               ) : (
                 <>
-                  Finalize Batch
+                  Finalize Batch ({selectedTeams.length})
                   <ShieldCheck className="w-6 h-6" />
                 </>
               )}

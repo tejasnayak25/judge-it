@@ -9,7 +9,6 @@ import {
   Loader2,
   AlertCircle
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import Modal from '@/components/Modal';
 import { createCriterionAction, deleteCriterionAction, getCriteriaAction } from './actions';
 

@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase-server';
+import { getSession } from '@/lib/auth';
+import { adminDb } from '@/lib/firebase-admin';
 import { 
   Play, 
   CheckCircle2, 
@@ -11,17 +12,19 @@ import {
 import Link from 'next/link';
 
 export default async function JudgeDashboard() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSession();
+  
+  if (!session) return null;
 
   // Fetch assignment where judge is included
-  const { data: assignment, error: assignmentError } = await supabase
-    .from('assignments')
-    .select('*')
-    .contains('judge_ids', [user?.id])
-    .single();
+  const snapshot = await adminDb.collection('assignments')
+    .where('judge_ids', 'array-contains', session.uid)
+    .limit(1)
+    .get();
 
-  if (assignmentError || !assignment) {
+  const assignment = snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+
+  if (!assignment) {
     return (
       <div className="max-w-2xl mx-auto mt-12 text-center space-y-6">
         <div className="w-20 h-20 bg-muted rounded-3xl flex items-center justify-center mx-auto">
@@ -37,7 +40,9 @@ export default async function JudgeDashboard() {
     );
   }
 
-  if (!assignment.revealed) {
+  const assignmentData = assignment as any;
+
+  if (!assignmentData.revealed) {
     return (
       <div className="max-w-2xl mx-auto mt-12 text-center space-y-6">
         <div className="w-20 h-20 bg-yellow-500/10 rounded-3xl flex items-center justify-center mx-auto border border-yellow-500/20">
@@ -56,15 +61,16 @@ export default async function JudgeDashboard() {
     );
   }
 
-  // Fetch teams in this assignment
-  const { data: teams } = await supabase
-    .from('teams')
-    .select('*')
-    .in('id', assignment.team_ids);
+  // Fetch individual progress for this judge
+  const reviewsSnapshot = await adminDb.collection('reviews')
+    .where('assignment_id', '==', assignment.id)
+    .where('judge_id', '==', session.uid)
+    .get();
 
-  const totalTeams = assignment.team_ids.length;
-  const currentIndex = assignment.current_team_index;
+  const totalTeams = assignmentData.team_ids.length;
+  const currentIndex = reviewsSnapshot.size;
   const isCompleted = currentIndex >= totalTeams;
+  const hasStarted = currentIndex > 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8 px-4 sm:px-6 lg:px-8">
@@ -83,7 +89,7 @@ export default async function JudgeDashboard() {
             
             <div className="relative space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-primary/10 text-primary text-[10px] sm:text-xs font-bold font-outfit tracking-wider uppercase">
-                {isCompleted ? 'COMPLETED' : assignment.started ? 'IN PROGRESS' : 'READY TO START'}
+                {isCompleted ? 'COMPLETED' : hasStarted ? 'IN PROGRESS' : 'READY TO START'}
               </div>
               
               <div className="space-y-2">
@@ -101,10 +107,10 @@ export default async function JudgeDashboard() {
                   </div>
                 ) : (
                   <Link 
-                    href={`/judge/review/${assignment.id}`}
+                    href={`/judge/review/${assignmentData.id}`}
                     className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-primary text-primary-foreground font-bold rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-xl shadow-primary/20"
                   >
-                    {assignment.started ? 'Continue' : 'Start Now'}
+                    {hasStarted ? 'Continue' : 'Start Now'}
                     <ArrowRight className="w-5 h-5" />
                   </Link>
                 )}

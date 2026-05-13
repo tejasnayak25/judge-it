@@ -15,7 +15,9 @@ import {
   Settings,
   X
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { auth } from '@/lib/firebase';
+import { signOut } from 'firebase/auth';
+import { logoutAction } from '@/app/login/actions';
 
 export default function AdminSidebar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,7 +25,8 @@ export default function AdminSidebar() {
   const router = useRouter();
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut(auth);
+    await logoutAction();
     router.push('/login');
   };
 

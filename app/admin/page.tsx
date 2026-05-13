@@ -11,29 +11,24 @@ import {
   Download,
   Loader2
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase-server';
+import { adminDb } from '@/lib/firebase-admin';
 import ExportWinnersButton from '@/components/admin/ExportWinnersButton';
 
 export default async function AdminDashboard() {
-  const supabase = await createClient();
+  // Fetch stats from Firestore
+  const [judgesSnap, teamsSnap, assignmentsSnap, reviewsSnap] = await Promise.all([
+    adminDb.collection('users').where('role', '==', 'judge').get(),
+    adminDb.collection('teams').get(),
+    adminDb.collection('assignments').get(),
+    adminDb.collection('reviews').get()
+  ]);
 
-  // Fetch stats
-  const { count: judgesCount } = await supabase
-    .from('user_profiles')
-    .select('*', { count: 'exact', head: true })
-    .eq('role', 'judge');
-
-  const { count: teamsCount } = await supabase
-    .from('teams')
-    .select('*', { count: 'exact', head: true });
-
-  const { count: assignmentsCount } = await supabase
-    .from('assignments')
-    .select('*', { count: 'exact', head: true });
-
-  const { count: reviewsCount } = await supabase
-    .from('reviews')
-    .select('*', { count: 'exact', head: true });
+  const judgesCount = judgesSnap.size;
+  const teamsCount = teamsSnap.size;
+  const assignmentsCount = assignmentsSnap.size;
+  
+  // Calculate unique teams judged
+  const uniqueTeamsJudged = new Set(reviewsSnap.docs.map(doc => doc.data().team_id)).size;
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -62,10 +57,10 @@ export default async function AdminDashboard() {
           trend="8 slots filled"
         />
         <StatCard 
-          title="Reviews" 
-          value={reviewsCount || 0} 
+          title="Teams Judged" 
+          value={uniqueTeamsJudged || 0} 
           icon={<CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" />}
-          trend="24% complete"
+          trend={`${Math.round((uniqueTeamsJudged / (teamsCount || 1)) * 100)}% complete`}
         />
       </div>
 
@@ -75,7 +70,7 @@ export default async function AdminDashboard() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h3 className="text-lg sm:text-xl font-bold font-outfit">Event Progress</h3>
-              <p className="text-xs text-muted-foreground">Real-time judging completion rate</p>
+              <p className="text-xs text-muted-foreground">Real-time team evaluation rate</p>
             </div>
             <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold">
               <Activity className="w-4 h-4" />
@@ -88,30 +83,30 @@ export default async function AdminDashboard() {
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Overall Completion</span>
                 <span className="text-2xl font-black font-outfit text-primary">
-                  {Math.round((reviewsCount || 0) / ((teamsCount || 1) * 2) * 100)}%
+                  {Math.round((uniqueTeamsJudged || 0) / (teamsCount || 1) * 100)}%
                 </span>
               </div>
               <div className="w-full bg-muted/50 h-6 rounded-2xl p-1 overflow-hidden border border-border">
                 <div 
                   className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-xl shadow-[0_0_20px_rgba(var(--primary),0.3)] transition-all duration-1000 ease-out"
-                  style={{ width: `${Math.min(100, (reviewsCount || 0) / ((teamsCount || 1) * 2) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (uniqueTeamsJudged || 0) / (teamsCount || 1) * 100)}%` }}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 border-t border-border/50">
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground">Submitted</span>
-                <p className="text-xl font-bold font-outfit">{reviewsCount || 0}</p>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">Teams Done</span>
+                <p className="text-xl font-bold font-outfit">{uniqueTeamsJudged || 0}</p>
               </div>
               <div className="space-y-1">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground">Expected</span>
-                <p className="text-xl font-bold font-outfit">{(teamsCount || 0) * 2}</p>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">Total Teams</span>
+                <p className="text-xl font-bold font-outfit">{teamsCount || 0}</p>
               </div>
               <div className="space-y-1 col-span-2 sm:col-span-1">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground">Pending</span>
                 <p className="text-xl font-bold font-outfit text-primary">
-                  {Math.max(0, (teamsCount || 0) * 2 - (reviewsCount || 0))}
+                  {Math.max(0, (teamsCount || 0) - (uniqueTeamsJudged || 0))}
                 </p>
               </div>
             </div>

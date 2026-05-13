@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Shield, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
-import { createClient } from '@/lib/supabase-browser';
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { loginAction } from './actions';
 
 export default function LoginPage() {
-  const supabase = createClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,30 +21,19 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // 1. Sign in with Firebase Client SDK
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const idToken = await userCredential.user.getIdToken();
 
-      if (authError) throw authError;
+      // 2. Call server action to create session cookie and verify role
+      const result = await loginAction(idToken);
 
-      // Fetch user role from user_profiles
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .maybeSingle();
-
-      if (profileError) throw profileError;
-
-      if (!profile) {
-        // If no profile exists, the trigger might have failed or not run yet
-        setError('User profile not found. Please contact an administrator.');
-        setLoading(false);
-        return;
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
-      if (profile.role === 'admin') {
+      // 3. Redirect based on role
+      if (result.role === 'admin') {
         window.location.href = '/admin';
       } else {
         window.location.href = '/judge';
@@ -57,7 +47,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-900 via-background to-background">
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none"></div>
+      <div className="absolute inset-0 bg-black/10 pointer-events-none"></div>
       
       <motion.div 
         initial={{ opacity: 0, y: 20 }}

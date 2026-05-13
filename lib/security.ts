@@ -1,43 +1,35 @@
-import { createClient } from '@/lib/supabase-server';
+import { getSession } from './auth';
+import { db } from './db';
 
 export async function ensureAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSession();
 
-  if (!user) {
+  if (!session) {
     throw new Error('Unauthorized: No active session found');
   }
 
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const profile = await db.getProfile(session.uid);
 
-  if (profile?.role !== 'admin') {
+  if ((profile as any)?.role !== 'admin') {
     throw new Error('Unauthorized: Admin privileges required');
   }
 
-  return user;
+  return session;
 }
 
 export async function ensureJudge() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getSession();
 
-  if (!user) {
+  if (!session) {
     throw new Error('Unauthorized: No active session found');
   }
 
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+  const profile = await db.getProfile(session.uid) as any;
+  const role = profile?.role;
 
-  if (profile?.role !== 'judge') {
-    throw new Error('Unauthorized: Judge privileges required');
+  if (role !== 'judge' && role !== 'admin') {
+    throw new Error('Unauthorized: Access restricted to judges and administrators');
   }
 
-  return user;
+  return session;
 }

@@ -11,9 +11,12 @@ import {
   Loader2,
   ChevronDown,
   BarChart3,
-  RefreshCw
+  RefreshCw,
+  Medal,
+  Award,
+  Crown,
+  Target
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { getResultsAction } from './actions';
 import ExportWinnersButton from '@/components/admin/ExportWinnersButton';
 
@@ -21,19 +24,24 @@ interface Result {
   team_id: string;
   team_name: string;
   project_title: string;
+  slot_number: string;
   judge_reviews: {
     judge_name: string;
     total_score: number;
     scores: Record<string, number>;
   }[];
   average_score: number;
+  criteria_averages: Record<string, number>;
 }
 
 export default function ResultsPage() {
   const [results, setResults] = useState<Result[]>([]);
+  const [winners, setWinners] = useState<{ F: Result[], S: Result[], T: Result[] } | null>(null);
   const [criteria, setCriteria] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [selectedBatch, setSelectedBatch] = useState<string>('ALL');
 
   useEffect(() => {
     fetchResults();
@@ -47,6 +55,7 @@ export default function ResultsPage() {
 
       setCriteria(res.criteria || []);
       setResults(res.results || []);
+      setWinners(res.winners || null);
 
     } catch (error: any) {
       console.error('Error fetching results:', error.message);
@@ -55,10 +64,19 @@ export default function ResultsPage() {
     }
   }
 
-  const filteredResults = results.filter(r => 
-    r.team_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.project_title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Extract unique batches for the dropdown
+  const batches = Array.from(new Set(results.map(r => r.slot_number))).filter(Boolean).sort();
+
+  const filteredResults = results.filter(r => {
+    const matchesSearch = r.team_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         r.project_title.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const category = r.slot_number?.charAt(0).toUpperCase() || '';
+    const matchesCategory = selectedCategory === 'ALL' || category === selectedCategory;
+    const matchesBatch = selectedBatch === 'ALL' || r.slot_number === selectedBatch;
+
+    return matchesSearch && matchesCategory && matchesBatch;
+  });
 
   const exportCSV = () => {
     const headers = ['Team Name', 'Project Title', 'Avg Score', 'Judge 1', 'Score 1', 'Judge 2', 'Score 2'];
@@ -104,6 +122,87 @@ export default function ResultsPage() {
         </div>
       </div>
 
+      {/* Qualifiers Section */}
+      {!loading && winners && (
+        <div className="space-y-6">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-primary">
+              <TrendingUp className="w-6 h-6" />
+              <h2 className="text-xl font-bold font-outfit uppercase tracking-wider">Round 2 Qualifiers</h2>
+            </div>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest ml-8">Selected based on batch performance and tie-breaker criteria</p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* First Year Qualifiers */}
+            <div className="glass-card p-6 rounded-[2rem] border border-primary/20 bg-primary/5 space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm uppercase tracking-widest text-primary flex items-center gap-2">
+                  <Medal className="w-4 h-4" />
+                  First Year (F)
+                </h3>
+                <span className="text-[10px] font-bold bg-primary/10 px-2 py-1 rounded text-primary">{winners.F.length}/2 QUALIFIED</span>
+              </div>
+              <div className="space-y-3">
+                {winners.F.map((w, i) => (
+                  <div key={w.team_id} className="p-4 bg-card rounded-2xl border border-border shadow-sm flex items-center gap-4 group">
+                    <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-500 font-bold text-xs">#{i+1}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm truncate">{w.project_title}</p>
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase">{w.team_name} • {w.slot_number}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Second Year Winners */}
+            <div className="glass-card p-6 rounded-[2rem] border border-blue-500/20 bg-blue-500/5 space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm uppercase tracking-widest text-blue-500 flex items-center gap-2">
+                  <Award className="w-4 h-4" />
+                  Second Year (S)
+                </h3>
+                <span className="text-[10px] font-bold bg-blue-500/10 px-2 py-1 rounded text-blue-500">{winners.S.length}/5 QUALIFIED</span>
+              </div>
+              <div className="space-y-2">
+                {winners.S.map((w, i) => (
+                  <div key={w.team_id} className="p-3 bg-card rounded-xl border border-border shadow-sm flex items-center gap-3">
+                    <div className="w-6 h-6 rounded bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-[10px]">#{i+1}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-xs truncate">{w.project_title}</p>
+                      <p className="text-[9px] text-muted-foreground uppercase">{w.team_name} • {w.slot_number}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Third Year Winners */}
+            <div className="glass-card p-6 rounded-[2rem] border border-green-500/20 bg-green-500/5 space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm uppercase tracking-widest text-green-500 flex items-center gap-2">
+                  <Target className="w-4 h-4" />
+                  Third Year (T)
+                </h3>
+                <span className="text-[10px] font-bold bg-green-500/10 px-2 py-1 rounded text-green-500">{winners.T.length}/3 QUALIFIED</span>
+              </div>
+              <div className="space-y-3">
+                {winners.T.map((w, i) => (
+                  <div key={w.team_id} className="p-4 bg-card rounded-2xl border border-border shadow-sm flex items-center gap-4">
+                    <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500 font-bold text-xs">#{i+1}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm truncate">{w.project_title}</p>
+                      <p className="text-[10px] text-muted-foreground font-medium uppercase">{w.team_name} • {w.slot_number}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="glass-card p-6 rounded-3xl border border-border bg-card/30 flex items-center gap-4">
           <div className="w-12 h-12 bg-yellow-500/10 rounded-2xl flex items-center justify-center">
@@ -140,14 +239,49 @@ export default function ResultsPage() {
 
       <div className="flex flex-col md:flex-row gap-4">
         <div className="relative flex-1 group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <input 
             type="text" 
             placeholder="Search teams or projects..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-card/50 border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
+            className="w-full pl-12 pr-4 py-4 bg-card/50 border border-border rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none transition-all font-medium"
           />
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-2">
+          {['ALL', 'F', 'S', 'T'].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => {
+                setSelectedCategory(cat);
+                setSelectedBatch('ALL');
+              }}
+              className={`px-6 py-4 rounded-2xl font-bold text-sm transition-all border ${
+                selectedCategory === cat 
+                  ? 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20 scale-105' 
+                  : 'bg-card/50 text-muted-foreground border-border hover:border-primary/50'
+              }`}
+            >
+              {cat === 'ALL' ? 'All Years' : cat === 'F' ? '1st Year' : cat === 'S' ? '2nd Year' : '3rd Year'}
+            </button>
+          ))}
+          
+          <div className="h-10 w-[1px] bg-border mx-2 hidden md:block" />
+          
+          <select
+            value={selectedBatch}
+            onChange={(e) => setSelectedBatch(e.target.value)}
+            className="px-6 py-4 bg-card/50 border border-border rounded-2xl font-bold text-sm outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer min-w-[160px]"
+          >
+            <option value="ALL">All Batches</option>
+            {batches
+              .filter(b => selectedCategory === 'ALL' || b.startsWith(selectedCategory))
+              .map(batch => (
+                <option key={batch} value={batch}>Batch {batch}</option>
+              ))
+            }
+          </select>
         </div>
       </div>
 

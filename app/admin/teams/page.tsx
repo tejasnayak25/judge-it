@@ -16,7 +16,6 @@ import {
   CheckCircle2,
   ExternalLink
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import Modal from '@/components/Modal';
 import ActionMenu from '@/components/admin/ActionMenu';
 import { createTeamAction, bulkCreateTeamsAction, getTeamsAction, deleteTeamAction } from './actions';
@@ -93,21 +92,28 @@ export default function TeamsPage() {
 
         const lines = content.trim().split('\n');
         // Skip header if it exists
-        const startIdx = lines[0].toLowerCase().includes('team') ? 1 : 0;
+        const startIdx = lines[0].toLowerCase().includes('slot') ? 1 : 0;
 
         const teamsToInsert = lines.slice(startIdx).map((line, index) => {
-          const parts = line.split(',').map(s => s.trim());
-          if (parts.length < 2) return null; // Skip empty lines
+          // Robust regex to split CSV while respecting quotes
+          const regex = /(?!\s*$)\s*(?:"([^"]*)"|([^,]*))\s*(?:,|$)/g;
+          const parts: string[] = [];
+          let match;
+          while ((match = regex.exec(line)) !== null) {
+            parts.push(match[1] || match[2] || "");
+          }
 
-          const [team_name, project_title, description, slot_number] = parts;
-          if (!team_name || !project_title) {
-            throw new Error(`Line ${index + 1 + startIdx} is invalid. Format: Team Name, Project Title, Description, Slot Number`);
+          if (parts.length < 3) return null;
+
+          const [slot_number, team_name, project_title] = parts;
+          if (!slot_number || !team_name || !project_title) {
+            throw new Error(`Line ${index + 1 + startIdx} is invalid. Format: Slot No, Student Names, Project Name`);
           }
           return {
+            slot_number,
             team_name,
             project_title,
-            description: description || '',
-            slot_number: slot_number ? slot_number.trim() : null
+            description: ''
           };
         }).filter(t => t !== null);
 
@@ -127,6 +133,16 @@ export default function TeamsPage() {
     };
     reader.readAsText(file);
   }
+
+  const downloadTemplate = () => {
+    const csvContent = "data:text/csv;charset=utf-8,SLOT NO.,STUDENT NAMES (USN),PROJECT NAME\nF01,John Doe (1JS21CS001),AI Smart Home\nS12,Jane Smith (1JS21CS002),Eco Tracker";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "teams_template.csv");
+    document.body.appendChild(link);
+    link.click();
+  };
 
   return (
     <div className="space-y-8">
@@ -225,13 +241,22 @@ export default function TeamsPage() {
             />
           </div>
 
-          <div className="p-4 bg-primary/5 border border-primary/10 rounded-2xl space-y-2">
-            <h4 className="text-sm font-bold flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              CSV Format Required
-            </h4>
+          <div className="p-4 bg-primary/5 border border-primary/10 rounded-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                CSV Format Required
+              </h4>
+              <button 
+                onClick={downloadTemplate}
+                className="text-[10px] font-bold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2 py-1 rounded"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Download Template
+              </button>
+            </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Format: <code className="text-primary font-bold">Team Name, Project Title, Description, Slot Number</code>
+              Format: <code className="text-primary font-bold">SLOT NO., STUDENT NAMES (USN), PROJECT NAME</code>
             </p>
           </div>
 

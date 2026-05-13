@@ -1,18 +1,21 @@
 'use server';
 
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { ensureAdmin } from '@/lib/security';
 
 export async function getTeamsAction() {
   try {
     await ensureAdmin();
-    const { data, error } = await supabaseAdmin
-      .from('teams')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const snapshot = await adminDb.collection('teams')
+      .orderBy('created_at', 'desc')
+      .get();
 
-    if (error) throw error;
+    const data = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...(doc.data() as any)
+    })).sort((a, b) => (a.slot_number || '').localeCompare(b.slot_number || '', undefined, { numeric: true, sensitivity: 'base' }));
+
     return { success: true, data };
   } catch (error: any) {
     console.error('Error fetching teams:', error);
@@ -28,18 +31,15 @@ export async function createTeamAction(formData: FormData) {
 
   try {
     await ensureAdmin();
-    const { data, error } = await supabaseAdmin
-      .from('teams')
-      .insert([
-        { 
-          team_name: teamName, 
-          project_title: projectTitle, 
-          description, 
-          slot_number: slotNumber 
-        }
-      ]);
-
-    if (error) throw error;
+    const docRef = adminDb.collection('teams').doc();
+    await docRef.set({
+      id: docRef.id,
+      team_name: teamName,
+      project_title: projectTitle,
+      description,
+      slot_number: slotNumber,
+      created_at: new Date().toISOString(),
+    });
 
     revalidatePath('/admin/teams');
     return { success: true };
@@ -52,11 +52,18 @@ export async function createTeamAction(formData: FormData) {
 export async function bulkCreateTeamsAction(teams: any[]) {
   try {
     await ensureAdmin();
-    const { error } = await supabaseAdmin
-      .from('teams')
-      .insert(teams);
+    const batch = adminDb.batch();
+    
+    teams.forEach(team => {
+      const docRef = adminDb.collection('teams').doc();
+      batch.set(docRef, {
+        ...team,
+        id: docRef.id,
+        created_at: new Date().toISOString(),
+      });
+    });
 
-    if (error) throw error;
+    await batch.commit();
 
     revalidatePath('/admin/teams');
     return { success: true };
@@ -69,12 +76,7 @@ export async function bulkCreateTeamsAction(teams: any[]) {
 export async function deleteTeamAction(id: string) {
   try {
     await ensureAdmin();
-    const { error } = await supabaseAdmin
-      .from('teams')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+    await adminDb.collection('teams').doc(id).delete();
 
     revalidatePath('/admin/teams');
     return { success: true };

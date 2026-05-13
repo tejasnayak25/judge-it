@@ -1,18 +1,21 @@
 'use server';
 
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { ensureAdmin } from '@/lib/security';
 
 export async function getAssignmentsAction() {
   try {
     await ensureAdmin();
-    const { data, error } = await supabaseAdmin
-      .from('assignments')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const snapshot = await adminDb.collection('assignments')
+      .orderBy('created_at', 'desc')
+      .get();
 
-    if (error) throw error;
+    const data = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
     return { success: true, data };
   } catch (error: any) {
     console.error('Error fetching assignments:', error);
@@ -23,17 +26,16 @@ export async function getAssignmentsAction() {
 export async function createAssignmentAction(judgeIds: string[], teamIds: string[]) {
   try {
     await ensureAdmin();
-    const { data, error } = await supabaseAdmin
-      .from('assignments')
-      .insert([
-        {
-          judge_ids: judgeIds,
-          team_ids: teamIds,
-          revealed: false
-        }
-      ]);
-
-    if (error) throw error;
+    const docRef = adminDb.collection('assignments').doc();
+    await docRef.set({
+      id: docRef.id,
+      judge_ids: judgeIds,
+      team_ids: teamIds,
+      revealed: false,
+      started: false,
+      current_team_index: 0,
+      created_at: new Date().toISOString(),
+    });
 
     revalidatePath('/admin/assignments');
     return { success: true };
@@ -46,12 +48,9 @@ export async function createAssignmentAction(judgeIds: string[], teamIds: string
 export async function toggleAssignmentRevealAction(id: string, currentStatus: boolean) {
   try {
     await ensureAdmin();
-    const { error } = await supabaseAdmin
-      .from('assignments')
-      .update({ revealed: !currentStatus })
-      .eq('id', id);
-
-    if (error) throw error;
+    await adminDb.collection('assignments').doc(id).update({ 
+      revealed: !currentStatus 
+    });
 
     revalidatePath('/admin/assignments');
     return { success: true };
@@ -64,12 +63,7 @@ export async function toggleAssignmentRevealAction(id: string, currentStatus: bo
 export async function deleteAssignmentAction(id: string) {
   try {
     await ensureAdmin();
-    const { error } = await supabaseAdmin
-      .from('assignments')
-      .delete()
-      .eq('id', id);
-
-    if (error) throw error;
+    await adminDb.collection('assignments').doc(id).delete();
 
     revalidatePath('/admin/assignments');
     return { success: true };

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase-server';
+import { getSession } from '@/lib/auth';
+import { db } from '@/lib/db';
 import JudgeSidebar from '@/components/judge/JudgeSidebar';
 
 export default async function JudgeLayout({
@@ -7,20 +8,14 @@ export default async function JudgeLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const session = await getSession();
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session) {
     redirect('/login');
   }
 
   // Fetch user profile for UI data
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('role, full_name')
-    .eq('id', user.id)
-    .single();
+  const profile = await db.getProfile(session.uid) as any;
 
   if (!profile || profile.role !== 'judge') {
     redirect('/login');

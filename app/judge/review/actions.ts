@@ -1,47 +1,56 @@
 'use server';
 
-import { supabaseAdmin } from '@/lib/supabase-admin';
-import { createClient } from '@/lib/supabase-server';
+import { adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { ensureJudge } from '@/lib/security';
 
 export async function getReviewStateAction(assignmentId: string) {
   try {
-    const user = await ensureJudge();
+    const session = await ensureJudge();
+    
     // 1. Fetch Assignment
-    const { data: assignment, error: assignmentError } = await supabaseAdmin
-      .from('assignments')
-      .select('*')
-      .eq('id', assignmentId)
-      .single();
-
-    if (assignmentError) throw assignmentError;
+    const assignDoc = await adminDb.collection('assignments').doc(assignmentId).get();
+    if (!assignDoc.exists) throw new Error('Assignment not found');
+    const assignment = { id: assignDoc.id, ...assignDoc.data() } as any;
 
     // 2. Fetch Criteria
-    const { data: criteria, error: criteriaError } = await supabaseAdmin
-      .from('criteria')
-      .select('*')
-      .order('created_at', { ascending: true });
+    const criteriaSnap = await adminDb.collection('criteria')
+      .orderBy('created_at', 'asc')
+      .get();
+    const criteria = criteriaSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    if (criteriaError) throw criteriaError;
+    // 3. Calculate Current Team Dynamically for THIS Judge
+    // Fetch all reviews by this judge for this assignment
+    const reviewsSnap = await adminDb.collection('reviews')
+      .where('assignment_id', '==', assignmentId)
+      .where('judge_id', '==', session.uid)
+      .get();
+    
+    const reviewedTeamIds = new Set(reviewsSnap.docs.map(doc => doc.data().team_id));
+    
+    // Find first team in the list that hasn't been reviewed by this judge
+    let currentTeamIndex = 0;
+    let teamId = null;
 
-    // 3. Fetch Current Team
-    const teamId = assignment.team_ids[assignment.current_team_index];
-    if (!teamId) {
-      return { success: true, assignment, criteria, team: null, finished: true };
+    for (let i = 0; i < assignment.team_ids.length; i++) {
+      if (!reviewedTeamIds.has(assignment.team_ids[i])) {
+        currentTeamIndex = i;
+        teamId = assignment.team_ids[i];
+        break;
+      }
     }
 
-    const { data: team, error: teamError } = await supabaseAdmin
-      .from('teams')
-      .select('*')
-      .eq('id', teamId)
-      .single();
+    if (!teamId) {
+      return { success: true, assignment: { ...assignment, current_team_index: assignment.team_ids.length }, criteria, team: null, finished: true };
+    }
 
-    if (teamError) throw teamError;
+    const teamDoc = await adminDb.collection('teams').doc(teamId).get();
+    if (!teamDoc.exists) throw new Error('Team not found');
+    const team = { id: teamDoc.id, ...teamDoc.data() };
 
     return { 
       success: true, 
-      assignment, 
+      assignment: { ...assignment, current_team_index: currentTeamIndex }, 
       criteria, 
       team, 
       finished: false 
@@ -54,56 +63,39 @@ export async function getReviewStateAction(assignmentId: string) {
 
 export async function submitReviewAction(assignmentId: string, teamId: string, scores: any) {
   try {
-    const user = await ensureJudge();
+    const session = await ensureJudge();
 
     // 0. Verify assignment ownership
-    const { data: checkAssign } = await supabaseAdmin
-      .from('assignments')
-      .select('judge_ids')
-      .eq('id', assignmentId)
-      .single();
+    const assignDoc = await adminDb.collection('assignments').doc(assignmentId).get();
+    const assignment = assignDoc.data();
 
-    if (!checkAssign?.judge_ids.includes(user.id)) {
+    if (!assignment?.judge_ids.includes(session.uid)) {
       throw new Error('Unauthorized: You are not assigned to this panel');
     }
 
     // 1. Insert Review
-    const { error: reviewError } = await supabaseAdmin
-      .from('reviews')
-      .insert([
-        {
-          assignment_id: assignmentId,
-          judge_id: user.id,
-          team_id: teamId,
-          scores: scores
-        }
-      ]);
+    const reviewRef = adminDb.collection('reviews').doc();
+    await reviewRef.set({
+      id: reviewRef.id,
+      assignment_id: assignmentId,
+      judge_id: session.uid,
+      team_id: teamId,
+      scores: scores,
+      submitted_at: new Date().toISOString(),
+    });
 
-    if (reviewError) throw reviewError;
+    // 2. Check if finished (now based on review count for this judge)
+    const reviewsSnap = await adminDb.collection('reviews')
+      .where('assignment_id', '==', assignmentId)
+      .where('judge_id', '==', session.uid)
+      .get();
 
-    // 2. Increment Assignment Index
-    const { data: assignment } = await supabaseAdmin
-      .from('assignments')
-      .select('current_team_index, team_ids')
-      .eq('id', assignmentId)
-      .single();
-
-    const nextIndex = (assignment?.current_team_index || 0) + 1;
-    
-    await supabaseAdmin
-      .from('assignments')
-      .update({
-        current_team_index: nextIndex,
-        started: true
-      })
-      .eq('id', assignmentId);
+    const isFinished = reviewsSnap.size >= (assignment?.team_ids.length || 0);
 
     revalidatePath('/judge/history');
     revalidatePath('/judge');
 
-    console.log(`Review submitted successfully for team ${teamId} by judge ${user.id}`);
-
-    return { success: true, finished: nextIndex >= (assignment?.team_ids.length || 0) };
+    return { success: true, finished: isFinished };
   } catch (error: any) {
     console.error('Error in submitReviewAction:', error);
     return { success: false, error: error.message };
@@ -112,19 +104,22 @@ export async function submitReviewAction(assignmentId: string, teamId: string, s
 
 export async function getJudgeHistoryAction() {
   try {
-    const user = await ensureJudge();
+    const session = await ensureJudge();
 
-    console.log(`Fetching history for judge: ${user.id}`);
+    const reviewsSnap = await adminDb.collection('reviews')
+      .where('judge_id', '==', session.uid)
+      .orderBy('submitted_at', 'desc')
+      .get();
 
-    const { data: reviews, error } = await supabaseAdmin
-      .from('reviews')
-      .select('*, teams(*)')
-      .eq('judge_id', user.id)
-      .order('submitted_at', { ascending: false });
-
-    if (error) throw error;
-
-    console.log(`Found ${reviews?.length || 0} reviews in history`);
+    const reviews = await Promise.all(reviewsSnap.docs.map(async (doc) => {
+      const data = doc.data();
+      const teamDoc = await adminDb.collection('teams').doc(data.team_id).get();
+      return {
+        ...data,
+        id: doc.id,
+        teams: teamDoc.exists ? { id: teamDoc.id, ...teamDoc.data() } : null
+      };
+    }));
 
     return { success: true, reviews };
   } catch (error: any) {

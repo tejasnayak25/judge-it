@@ -13,7 +13,6 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '@/lib/supabase';
 import StarRating from '@/components/rating/StarRating';
 import { getReviewStateAction, submitReviewAction } from '../actions';
 

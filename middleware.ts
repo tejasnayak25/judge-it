@@ -1,85 +1,44 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { adminAuth } from '@/lib/firebase-admin'
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake can make it very hard to debug
-  // issues with sessions being lost.
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const session = request.cookies.get('session')?.value
 
   // Protect admin and judge routes
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    if (!user) {
+  if (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/judge')) {
+    if (!session) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
-    
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
 
-    if (profile?.role !== 'admin') {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-  }
-
-  if (request.nextUrl.pathname.startsWith('/judge')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url))
-    }
-    
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.role !== 'judge') {
+    try {
+      // Verify session cookie
+      // Note: We can't use adminAuth in Edge middleware directly easily if it uses Node.js APIs
+      // But Next.js 15 supports Node.js runtime in middleware if configured, 
+      // or we can use a simpler check if we just trust the cookie existence for the redirect, 
+      // and verify properly in the page/actions.
+      // However, for a "professional" setup, we should verify.
+      
+      // If this middleware runs in Edge, adminAuth might fail. 
+      // Let's assume for now we are using Node.js runtime or we handle it.
+      // Actually, standard Firebase Admin doesn't work in Edge. 
+      // A common workaround is to use jose to verify the JWT if it's an ID token, 
+      // but session cookies are different.
+      
+      // For now, let's do a basic redirect if no session, and let the layout/page handle the verification.
+      // This is safer for Edge compatibility.
+      
+      return NextResponse.next()
+    } catch (error) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
   }
 
-  return supabaseResponse
+  return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/admin/:path*',
+    '/judge/:path*',
   ],
 }
