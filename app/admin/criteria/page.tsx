@@ -35,7 +35,7 @@ export default function CriteriaPage() {
       const result = await getCriteriaAction();
 
       if (result.success) {
-        setCriteria(result.data || []);
+        setCriteria((result.data as any) || []);
       } else {
         throw new Error(result.error);
       }

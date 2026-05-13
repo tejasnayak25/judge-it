@@ -64,7 +64,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       }
 
       setAssignment(res.assignment);
-      setCriteria(res.criteria || []);
+      setCriteria((res.criteria as any) || []);
       setCurrentTeam(res.team);
 
       // Initialize scores
