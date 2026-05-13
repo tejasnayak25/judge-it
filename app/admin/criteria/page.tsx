@@ -14,8 +14,8 @@ import { createCriterionAction, deleteCriterionAction, getCriteriaAction } from 
 
 interface Criterion {
   id: string;
-  name: string;
-  label: string;
+  name?: string;
+  label?: string;
 }
 
 export default function CriteriaPage() {
