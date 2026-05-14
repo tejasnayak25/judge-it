@@ -85,3 +85,21 @@ export async function deleteTeamAction(id: string) {
     return { success: false, error: error.message };
   }
 }
+
+export async function updateTeamAction(id: string, teamName: string, projectTitle: string, description: string, slotNumber: string) {
+  try {
+    await ensureAdmin();
+    await adminDb.collection('teams').doc(id).update({
+      team_name: teamName,
+      project_title: projectTitle,
+      description: description,
+      slot_number: slotNumber,
+    });
+
+    revalidatePath('/admin/teams');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating team:', error);
+    return { success: false, error: error.message };
+  }
+}

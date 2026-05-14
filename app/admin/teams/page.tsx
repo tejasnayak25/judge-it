@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import ActionMenu from '@/components/admin/ActionMenu';
-import { createTeamAction, bulkCreateTeamsAction, getTeamsAction, deleteTeamAction } from './actions';
+import { createTeamAction, bulkCreateTeamsAction, getTeamsAction, deleteTeamAction, updateTeamAction } from './actions';
 
 interface Team {
   id: string;
@@ -34,6 +34,7 @@ export default function TeamsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -62,17 +63,38 @@ export default function TeamsPage() {
     team.project_title?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  async function handleAddTeam(formData: FormData) {
+  const handleOpenEdit = (team: Team) => {
+    setEditingTeam(team);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenAdd = () => {
+    setEditingTeam(null);
+    setIsModalOpen(true);
+  };
+
+  async function handleSaveTeam(formData: FormData) {
     setIsSubmitting(true);
     setFormError(null);
 
-    const result = await createTeamAction(formData);
+    const teamName = formData.get('teamName') as string;
+    const projectTitle = formData.get('projectTitle') as string;
+    const description = formData.get('description') as string;
+    const slotNumber = formData.get('slotNumber') as string;
+
+    let result;
+    if (editingTeam) {
+      result = await updateTeamAction(editingTeam.id, teamName, projectTitle, description, slotNumber);
+    } else {
+      result = await createTeamAction(formData);
+    }
 
     if (result.success) {
       setIsModalOpen(false);
+      setEditingTeam(null);
       fetchTeams();
     } else {
-      setFormError(result.error || 'Failed to register team');
+      setFormError(result.error || 'Failed to save team');
     }
     setIsSubmitting(false);
   }
@@ -160,7 +182,7 @@ export default function TeamsPage() {
             Import CSV
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenAdd}
             className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/20"
           >
             <Plus className="w-5 h-5" />
@@ -172,21 +194,21 @@ export default function TeamsPage() {
       {/* Manual Registration Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Register Team"
+        onClose={() => { setIsModalOpen(false); setEditingTeam(null); }}
+        title={editingTeam ? "Edit Team Details" : "Register Team"}
       >
-        <form action={handleAddTeam} className="space-y-4">
+        <form action={handleSaveTeam} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Team Name</label>
-            <input name="teamName" required placeholder="e.g. Team Alpha" className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+            <input name="teamName" required defaultValue={editingTeam?.team_name || ''} placeholder="e.g. Team Alpha" className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Project Title</label>
-            <input name="projectTitle" required placeholder="e.g. AI Smart Home" className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+            <input name="projectTitle" required defaultValue={editingTeam?.project_title || ''} placeholder="e.g. AI Smart Home" className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Description</label>
-            <textarea name="description" placeholder="Short project summary..." className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all min-h-[100px]" />
+            <textarea name="description" defaultValue={editingTeam?.description || ''} placeholder="Short project summary..." className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all min-h-[100px]" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Slot Number</label>
@@ -194,6 +216,7 @@ export default function TeamsPage() {
               name="slotNumber"
               type="text"
               required
+              defaultValue={editingTeam?.slot_number || ''}
               pattern="^[FST]\d{2}$"
               placeholder="e.g. F01, S12, T05"
               title="Must start with F, S, or T followed by 2 digits (e.g. F01)"
@@ -211,7 +234,7 @@ export default function TeamsPage() {
 
           <div className="pt-4">
             <button type="submit" disabled={isSubmitting} className="w-full py-3 px-4 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Register Team"}
+              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (editingTeam ? "Save Changes" : "Register Team")}
             </button>
           </div>
         </form>
@@ -327,7 +350,10 @@ export default function TeamsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <ActionMenu onDelete={async () => { await deleteTeamAction(team.id); fetchTeams(); }} />
+                      <ActionMenu 
+                        onEdit={() => handleOpenEdit(team)}
+                        onDelete={async () => { await deleteTeamAction(team.id); fetchTeams(); }} 
+                      />
                     </td>
                   </tr>
                 ))}
