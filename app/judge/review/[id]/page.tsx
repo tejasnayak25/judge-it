@@ -141,6 +141,21 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     <div className="max-w-6xl mx-auto pb-20 px-4 sm:px-6 lg:px-8">
       {/* Header Info */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        
+        {/* Mobile Top Row: Slot + Progress */}
+        <div className="flex items-center justify-between md:hidden w-full">
+          <div className="px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-xl shrink-0">
+            <span className="text-[10px] font-bold text-primary uppercase tracking-widest block">Slot</span>
+            <p className="text-sm font-black font-outfit text-primary">{currentTeam.slot_number || 'N/A'}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Progress</p>
+            <p className="text-sm font-bold font-outfit">
+              {assignment.current_team_index + 1} <span className="text-muted-foreground/50">of</span> {assignment.team_ids.length}
+            </p>
+          </div>
+        </div>
+
         <div className="flex items-center gap-4 w-full md:w-auto">
           <div className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-2xl hidden md:block shrink-0">
             <span className="text-xs font-bold text-primary uppercase tracking-widest">Judging Slot</span>
