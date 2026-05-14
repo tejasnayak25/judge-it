@@ -178,7 +178,7 @@ export default function AssignmentsPage() {
         </div>
         <button 
           onClick={handleOpenCreate}
-          className="flex items-center gap-2 px-6 py-3.5 bg-primary text-primary-foreground font-bold rounded-2xl hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-primary/20"
+          className="flex items-center justify-center w-full md:w-auto gap-2 px-6 py-3.5 bg-primary text-primary-foreground font-bold rounded-2xl hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-primary/20"
         >
           <Plus className="w-5 h-5" />
           Create New Slot
@@ -378,8 +378,8 @@ export default function AssignmentsPage() {
             <p className="text-muted-foreground font-medium animate-pulse">Syncing judging slots...</p>
           </div>
         ) : assignments.length > 0 ? (
-          <div className="overflow-x-auto overflow-hidden rounded-[2rem]">
-            <table className="w-full text-left border-collapse min-w-[900px]">
+          <div className="overflow-x-auto rounded-[2rem] pb-24">
+            <table className="w-full text-left border-collapse min-w-[800px]">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
                   <th className="px-8 py-5 font-bold text-xs uppercase tracking-widest text-muted-foreground">Panel Members</th>
