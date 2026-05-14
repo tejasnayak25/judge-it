@@ -149,7 +149,7 @@ export default function GrandFinalePage() {
 
         {/* Right: Master Panel Assignment */}
         <div className="lg:col-span-5 space-y-6">
-          <div className="glass-card p-8 rounded-[2.5rem] border border-primary/20 bg-primary/5 sticky top-8">
+          <div className="glass-card p-6 sm:p-8 rounded-3xl sm:rounded-[2.5rem] border border-primary/20 bg-primary/5 sticky top-8">
             <div className="space-y-6">
               <div className="space-y-1">
                 <h3 className="text-xl font-black font-outfit uppercase tracking-tight">Master Panel</h3>

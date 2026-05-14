@@ -181,3 +181,41 @@ export async function deleteJudgeAction(id: string) {
     return { success: false, error: error.message };
   }
 }
+
+export async function updateJudgeAction(id: string, fullName: string, email: string, password?: string) {
+  try {
+    if (!email || !fullName) {
+      return { success: false, error: 'Name and email are required.' };
+    }
+
+    const authUpdate: any = {
+      email: email,
+      displayName: fullName,
+    };
+    if (password && password.trim().length >= 6) {
+      authUpdate.password = password.trim();
+    }
+
+    // 1. Update Firebase Auth
+    await adminAuth.updateUser(id, authUpdate);
+
+    const dbUpdate: any = {
+      full_name: fullName,
+      email: email,
+      updated_at: new Date().toISOString(),
+    };
+    if (password && password.trim().length >= 6) {
+      dbUpdate.password = password.trim();
+    }
+
+    // 2. Update Firestore
+    await adminDb.collection('users').doc(id).update(dbUpdate);
+
+    revalidatePath('/admin/judges');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating judge:', error);
+    return { success: false, error: error.message };
+  }
+}
+

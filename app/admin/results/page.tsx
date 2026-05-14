@@ -303,15 +303,19 @@ export default function ResultsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredResults.map((result, index) => (
+                {filteredResults.map((result, index) => {
+                  const isQualified = 
+                    winners?.F?.some((w: any) => w.team_id === result.team_id) ||
+                    winners?.S?.some((w: any) => w.team_id === result.team_id) ||
+                    winners?.T?.some((w: any) => w.team_id === result.team_id);
+                  
+                  return (
                   <tr key={result.team_id} className="hover:bg-muted/30 transition-colors group">
                     <td className="px-6 py-4">
                       <span className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-all ${
-                        index === 0 ? 'bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.5)] scale-110' : 
-                        index === 1 ? 'bg-zinc-300 text-black' :
-                        index === 2 ? 'bg-amber-600 text-white' :
-                        index < 6 ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)] border border-indigo-400' :
-                        'bg-muted text-muted-foreground'
+                        isQualified 
+                          ? 'bg-green-500 text-black shadow-[0_0_15px_rgba(34,197,94,0.4)] scale-110 border border-green-400' 
+                          : 'bg-muted text-muted-foreground'
                       }`}>
                         {index + 1}
                       </span>
@@ -357,7 +361,8 @@ export default function ResultsPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>

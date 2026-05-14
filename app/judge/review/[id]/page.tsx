@@ -48,6 +48,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [scores, setScores] = useState<Record<string, number>>({});
+  const [allTeams, setAllTeams] = useState<any[]>([]);
 
   useEffect(() => {
     fetchReviewState();
@@ -68,6 +69,7 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       setAssignment(res.assignment as any);
       setCriteria((res.criteria as any) || []);
       setCurrentTeam((res.team as any) || null);
+      setAllTeams(res.allTeams || []);
 
       // Initialize scores from existing ones if available
       const initialScores: Record<string, number> = {};
@@ -139,16 +141,33 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     <div className="max-w-6xl mx-auto pb-20 px-4 sm:px-6 lg:px-8">
       {/* Header Info */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div className="flex items-center gap-4">
-          <div className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-2xl">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <div className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-2xl hidden md:block shrink-0">
             <span className="text-xs font-bold text-primary uppercase tracking-widest">Judging Slot</span>
             <p className="text-xl font-black font-outfit text-primary">{currentTeam.slot_number || 'N/A'}</p>
           </div>
-          <div className="h-10 w-[1px] bg-border hidden md:block" />
-          <div className="space-y-0.5">
-            <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Evaluation Progress</p>
+          
+          <div className="space-y-0.5 flex-1 min-w-[200px] max-w-sm">
+            <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest">Jump to Team</p>
+            <select 
+              value={assignment.current_team_index}
+              onChange={(e) => fetchReviewState(Number(e.target.value))}
+              disabled={isSubmitting}
+              className="w-full px-3 py-2 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-bold text-sm truncate cursor-pointer shadow-sm hover:border-primary/50"
+            >
+              {allTeams.map((t, idx) => (
+                <option key={t.id} value={idx}>
+                  Team {idx + 1}: {t.project_title} ({t.slot_number})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="h-10 w-[1px] bg-border hidden md:block shrink-0" />
+          <div className="space-y-0.5 hidden sm:block shrink-0">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Progress</p>
             <p className="text-lg font-bold font-outfit">
-              Team {assignment.current_team_index + 1} <span className="text-muted-foreground/50">of</span> {assignment.team_ids.length}
+              {assignment.current_team_index + 1} <span className="text-muted-foreground/50">of</span> {assignment.team_ids.length}
             </p>
           </div>
         </div>

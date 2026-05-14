@@ -56,11 +56,25 @@ export async function getReviewStateAction(assignmentId: string, targetIndex?: n
     // Get existing scores for this team if any
     const existingScores = reviewsMap.get(teamId) || null;
 
+    // 5. Fetch all teams basic info for dropdown
+    const allTeams = await Promise.all(
+      assignment.team_ids.map(async (tId: string) => {
+        const tDoc = await adminDb.collection('teams').doc(tId).get();
+        if (tDoc.exists) {
+          const data = tDoc.data();
+          return { id: tDoc.id, project_title: data?.project_title || 'Unknown', slot_number: data?.slot_number || 'N/A' };
+        }
+        return null;
+      })
+    );
+    const validTeams = allTeams.filter(t => t !== null);
+
     return { 
       success: true, 
       assignment: { ...assignment, current_team_index: currentTeamIndex }, 
       criteria, 
       team, 
+      allTeams: validTeams,
       existingScores,
       finished: false 
     };

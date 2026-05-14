@@ -18,11 +18,12 @@ import {
 } from 'lucide-react';
 import Modal from '@/components/Modal';
 import ActionMenu from '@/components/admin/ActionMenu';
-import { createJudgeAction, getJudgesAction, deleteJudgeAction, bulkCreateJudgesAction, syncJudgesAction } from './actions';
+import { createJudgeAction, getJudgesAction, deleteJudgeAction, bulkCreateJudgesAction, syncJudgesAction, updateJudgeAction } from './actions';
 
 interface Profile {
   id: string;
   full_name: string;
+  email?: string;
   role: string;
   created_at: string;
 }
@@ -35,6 +36,7 @@ export default function JudgesPage() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editingJudge, setEditingJudge] = useState<Profile | null>(null);
 
   useEffect(() => {
     fetchJudges();
@@ -59,19 +61,46 @@ export default function JudgesPage() {
     judge.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  async function handleAddJudge(formData: FormData) {
+  async function handleSaveJudge(formData: FormData) {
     setIsSubmitting(true);
     setFormError(null);
     
-    const result = await createJudgeAction(formData);
-    
-    if (result.success) {
-      setIsModalOpen(false);
-      fetchJudges();
+    if (editingJudge) {
+      const fullName = formData.get('fullName') as string;
+      const email = formData.get('email') as string;
+      const password = formData.get('password') as string;
+      const result = await updateJudgeAction(editingJudge.id, fullName, email, password);
+      
+      if (result.success) {
+        setIsModalOpen(false);
+        setEditingJudge(null);
+        fetchJudges();
+      } else {
+        setFormError(result.error || 'Failed to update judge details');
+      }
     } else {
-      setFormError(result.error || 'Failed to create judge account');
+      const result = await createJudgeAction(formData);
+      
+      if (result.success) {
+        setIsModalOpen(false);
+        fetchJudges();
+      } else {
+        setFormError(result.error || 'Failed to create judge account');
+      }
     }
     setIsSubmitting(false);
+  }
+
+  function handleOpenCreate() {
+    setEditingJudge(null);
+    setFormError(null);
+    setIsModalOpen(true);
+  }
+
+  function handleOpenEdit(judge: Profile) {
+    setEditingJudge(judge);
+    setFormError(null);
+    setIsModalOpen(true);
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -170,7 +199,7 @@ export default function JudgesPage() {
             Import CSV
           </button>
           <button 
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenCreate}
             className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-primary/20"
           >
             <Plus className="w-5 h-5" />
@@ -233,22 +262,30 @@ export default function JudgesPage() {
 
       <Modal 
         isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        title="Register New Judge"
+        onClose={() => { setIsModalOpen(false); setEditingJudge(null); }} 
+        title={editingJudge ? "Edit Judge Details" : "Register New Judge"}
       >
-        <form action={handleAddJudge} className="space-y-4">
+        <form action={handleSaveJudge} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Full Name</label>
-            <input name="fullName" required placeholder="e.g. John Doe" className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+            <input name="fullName" defaultValue={editingJudge?.full_name || ''} required placeholder="e.g. John Doe" className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-muted-foreground">Email Address</label>
-            <input name="email" type="email" required placeholder="judge@example.com" className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+            <input name="email" type="email" defaultValue={editingJudge?.email || ''} required placeholder="judge@example.com" className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">Password</label>
-            <input name="password" type="password" required placeholder="••••••••" minLength={6} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
-          </div>
+          
+          {editingJudge ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">New Password (Optional)</label>
+              <input name="password" type="password" placeholder="Leave blank to keep current password" minLength={6} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Password</label>
+              <input name="password" type="password" required placeholder="••••••••" minLength={6} className="w-full px-4 py-3 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all" />
+            </div>
+          )}
 
           {formError && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive font-medium flex items-center gap-2">
@@ -259,7 +296,7 @@ export default function JudgesPage() {
 
           <div className="pt-4">
             <button type="submit" disabled={isSubmitting} className="w-full py-3 px-4 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Create Account"}
+              {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : (editingJudge ? "Save Changes" : "Create Account")}
             </button>
           </div>
         </form>
@@ -318,7 +355,10 @@ export default function JudgesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <ActionMenu onDelete={async () => { await deleteJudgeAction(judge.id); fetchJudges(); }} />
+                      <ActionMenu 
+                        onEdit={() => handleOpenEdit(judge)}
+                        onDelete={async () => { await deleteJudgeAction(judge.id); fetchJudges(); }} 
+                      />
                     </td>
                   </tr>
                 ))}

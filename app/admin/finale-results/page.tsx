@@ -75,8 +75,8 @@ export default function FinaleResultsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-8">
           {/* Second Place */}
           {top6[1] && (
-            <div className="order-2 md:order-1 mt-12">
-              <div className="glass-card p-8 rounded-[3rem] border border-zinc-500/20 bg-zinc-500/5 text-center space-y-4 relative">
+            <div className="order-2 md:order-1 mt-6 md:mt-12">
+              <div className="glass-card p-6 sm:p-8 rounded-3xl sm:rounded-[3rem] border border-zinc-500/20 bg-zinc-500/5 text-center space-y-4 relative">
                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-12 h-12 bg-zinc-400 rounded-2xl flex items-center justify-center shadow-lg">
                   <Medal className="w-6 h-6 text-zinc-900" />
                 </div>
@@ -92,8 +92,8 @@ export default function FinaleResultsPage() {
 
           {/* First Place */}
           {top6[0] && (
-            <div className="order-1 md:order-2 scale-110">
-              <div className="glass-card p-10 rounded-[3rem] border border-yellow-500/30 bg-yellow-500/10 text-center space-y-6 relative shadow-[0_0_50px_rgba(234,179,8,0.1)]">
+            <div className="order-1 md:order-2 md:scale-110 z-10 mb-8 md:mb-0">
+              <div className="glass-card p-8 sm:p-10 rounded-3xl sm:rounded-[3rem] border border-yellow-500/30 bg-yellow-500/10 text-center space-y-6 relative shadow-[0_0_50px_rgba(234,179,8,0.1)]">
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-16 h-16 bg-yellow-500 rounded-3xl flex items-center justify-center shadow-2xl animate-bounce">
                   <Crown className="w-10 h-10 text-yellow-950" />
                 </div>
@@ -111,8 +111,8 @@ export default function FinaleResultsPage() {
 
           {/* Third Place */}
           {top6[2] && (
-            <div className="order-3 md:order-3 mt-12">
-              <div className="glass-card p-8 rounded-[3rem] border border-amber-700/20 bg-amber-700/5 text-center space-y-4 relative">
+            <div className="order-3 md:order-3 mt-6 md:mt-12">
+              <div className="glass-card p-6 sm:p-8 rounded-3xl sm:rounded-[3rem] border border-amber-700/20 bg-amber-700/5 text-center space-y-4 relative">
                 <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-12 h-12 bg-amber-700 rounded-2xl flex items-center justify-center shadow-lg">
                   <Award className="w-6 h-6 text-amber-100" />
                 </div>
@@ -129,8 +129,9 @@ export default function FinaleResultsPage() {
       )}
 
       {/* Full Leaderboard */}
-      <div className="glass-card rounded-[3rem] border border-border bg-card/30 overflow-hidden mt-20">
-        <table className="w-full text-left">
+      <div className="glass-card rounded-3xl sm:rounded-[3rem] border border-border bg-card/30 overflow-hidden mt-12 sm:mt-20">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[600px]">
           <thead>
             <tr className="bg-muted/50 border-b border-border">
               <th className="px-8 py-5 text-xs font-black uppercase tracking-widest">Rank</th>
@@ -173,6 +174,7 @@ export default function FinaleResultsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
