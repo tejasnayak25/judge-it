@@ -37,6 +37,8 @@ export default function AdminSidebar() {
     { href: '/admin/criteria', label: 'Features', icon: <Settings className="w-5 h-5" /> },
     { href: '/admin/assignments', label: 'Assignments', icon: <ClipboardList className="w-5 h-5" /> },
     { href: '/admin/results', label: 'Results', icon: <TrendingUp className="w-5 h-5" /> },
+    { href: '/admin/finale', label: 'Grand Finale', icon: <ShieldCheck className="w-5 h-5" /> },
+    { href: '/admin/finale-results', label: 'Finale Results', icon: <Trophy className="w-5 h-5" /> },
   ];
 
   return (

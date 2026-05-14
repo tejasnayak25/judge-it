@@ -16,13 +16,18 @@ export default async function JudgeDashboard() {
   
   if (!session) return null;
 
-  // Fetch assignment where judge is included
+  // Fetch all assignments where judge is included
   const snapshot = await adminDb.collection('assignments')
     .where('judge_ids', 'array-contains', session.uid)
-    .limit(1)
     .get();
 
-  const assignment = snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+  const allAssignments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+  
+  // Prioritize Grand Finale if it exists for this judge
+  const finaleAssignment = allAssignments.find(a => a.type === 'grand_finale');
+  const regularAssignment = allAssignments.find(a => a.type !== 'grand_finale');
+  
+  const assignment = finaleAssignment || regularAssignment;
 
   if (!assignment) {
     return (
@@ -75,27 +80,40 @@ export default async function JudgeDashboard() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8 px-4 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-2xl sm:text-3xl font-bold font-outfit tracking-tight">Active Assignment</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">Review your assigned projects sequentially.</p>
+        <div className="flex items-center gap-3">
+          {assignmentData.type === 'grand_finale' && (
+            <span className="px-3 py-1 bg-yellow-500 text-black text-[10px] font-black uppercase tracking-widest rounded-full shadow-[0_0_15px_rgba(234,179,8,0.3)]">
+              Grand Finale
+            </span>
+          )}
+          <h1 className="text-2xl sm:text-3xl font-bold font-outfit tracking-tight">
+            {assignmentData.type === 'grand_finale' ? 'Master Panel Evaluation' : 'Active Assignment'}
+          </h1>
+        </div>
+        <p className="text-sm sm:text-base text-muted-foreground">
+          {assignmentData.type === 'grand_finale' ? 'Final showdown: Evaluate the top teams to determine the overall winners.' : 'Review your assigned projects sequentially.'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
           {/* Main Status Card */}
-          <div className="glass-card p-6 sm:p-8 rounded-[1.5rem] sm:rounded-3xl border border-border bg-card/30 relative overflow-hidden group">
+          <div className={`glass-card p-6 sm:p-8 rounded-[1.5rem] sm:rounded-3xl border shadow-2xl relative overflow-hidden group ${assignmentData.type === 'grand_finale' ? 'border-yellow-500/30 bg-yellow-500/5' : 'border-border bg-card/30'}`}>
             <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform hidden sm:block">
-              <Trophy className="w-24 h-24 text-primary" />
+              <Trophy className={`w-24 h-24 ${assignmentData.type === 'grand_finale' ? 'text-yellow-500' : 'text-primary'}`} />
             </div>
             
             <div className="relative space-y-6">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-primary/10 text-primary text-[10px] sm:text-xs font-bold font-outfit tracking-wider uppercase">
+              <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-[10px] sm:text-xs font-bold font-outfit tracking-wider uppercase ${assignmentData.type === 'grand_finale' ? 'bg-yellow-500 text-black' : 'bg-primary/10 text-primary'}`}>
                 {isCompleted ? 'COMPLETED' : hasStarted ? 'IN PROGRESS' : 'READY TO START'}
               </div>
               
               <div className="space-y-2">
-                <h3 className="text-2xl sm:text-4xl font-bold font-outfit leading-tight">Judging Slot Assignment</h3>
+                <h3 className="text-2xl sm:text-4xl font-bold font-outfit leading-tight">
+                  {assignmentData.type === 'grand_finale' ? 'Finale Qualifier Round' : 'Judging Slot Assignment'}
+                </h3>
                 <p className="text-sm sm:text-lg text-muted-foreground">
-                  {totalTeams} Projects to be evaluated.
+                  {totalTeams} Elite Finalists to be evaluated.
                 </p>
               </div>
 

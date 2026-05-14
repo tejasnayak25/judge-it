@@ -21,6 +21,8 @@ interface Team {
   team_name: string;
   project_title: string;
   description: string;
+  members?: string;
+  slot_number?: string;
 }
 
 interface Assignment {
@@ -51,10 +53,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     fetchReviewState();
   }, [assignmentId]);
 
-  async function fetchReviewState() {
+  async function fetchReviewState(index?: number) {
     setLoading(true);
     try {
-      const res = await getReviewStateAction(assignmentId);
+      const res = await getReviewStateAction(assignmentId, index);
 
       if (!res.success) throw new Error(res.error);
 
@@ -67,10 +69,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
       setCriteria((res.criteria as any) || []);
       setCurrentTeam((res.team as any) || null);
 
-      // Initialize scores
+      // Initialize scores from existing ones if available
       const initialScores: Record<string, number> = {};
       res.criteria?.forEach((c: any) => {
-        initialScores[c.name] = 0;
+        initialScores[c.name] = res.existingScores?.[c.name] || 0;
       });
       setScores(initialScores);
 
@@ -79,6 +81,11 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handlePrevious() {
+    if (!assignment || assignment.current_team_index === 0) return;
+    await fetchReviewState(assignment.current_team_index - 1);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -100,10 +107,10 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
       if (!res.success) throw new Error(res.error);
 
-      if (res.finished) {
+      if (res.finished && (assignment?.current_team_index! + 1) === assignment?.team_ids.length) {
         router.push('/judge');
       } else {
-        await fetchReviewState();
+        await fetchReviewState(assignment?.current_team_index! + 1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
@@ -126,51 +133,79 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
 
   if (!currentTeam || !assignment) return null;
 
+  const isLastTeam = (assignment.current_team_index + 1) === assignment.team_ids.length;
+
   return (
-    <div className="max-w-5xl mx-auto pb-20 px-4 sm:px-6 lg:px-8">
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-6 sm:mb-8">
-        <span className="hidden sm:inline">Judging Slot</span>
-        <ChevronRight className="w-4 h-4 hidden sm:inline" />
-        <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold sm:bg-transparent sm:text-muted-foreground sm:p-0">
-          Team {assignment.current_team_index + 1} of {assignment.team_ids.length}
-        </span>
+    <div className="max-w-6xl mx-auto pb-20 px-4 sm:px-6 lg:px-8">
+      {/* Header Info */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-4">
+          <div className="px-4 py-2 bg-primary/10 border border-primary/20 rounded-2xl">
+            <span className="text-xs font-bold text-primary uppercase tracking-widest">Judging Slot</span>
+            <p className="text-xl font-black font-outfit text-primary">{currentTeam.slot_number || 'N/A'}</p>
+          </div>
+          <div className="h-10 w-[1px] bg-border hidden md:block" />
+          <div className="space-y-0.5">
+            <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Evaluation Progress</p>
+            <p className="text-lg font-bold font-outfit">
+              Team {assignment.current_team_index + 1} <span className="text-muted-foreground/50">of</span> {assignment.team_ids.length}
+            </p>
+          </div>
+        </div>
+        
+        {/* Navigation Controls */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handlePrevious}
+            disabled={assignment.current_team_index === 0 || isSubmitting}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card hover:bg-accent transition-colors disabled:opacity-30 text-sm font-bold uppercase tracking-wider"
+          >
+            <ChevronRight className="w-4 h-4 rotate-180" />
+            Previous
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
         {/* Left Column: Team Details */}
-        <div className="lg:col-span-2 space-y-6 sm:space-y-8">
+        <div className="lg:col-span-5 space-y-6">
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="glass-card p-6 sm:p-8 rounded-[1.5rem] sm:rounded-[2rem] border border-border bg-card/30 lg:sticky lg:top-24"
+            className="glass-card p-8 sm:p-10 rounded-[2.5rem] border border-border bg-card/30 lg:sticky lg:top-24 shadow-2xl"
           >
-            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-primary rounded-2xl flex items-center justify-center mb-4 sm:mb-6 shadow-2xl shadow-primary/20">
-              <Trophy className="w-6 h-6 sm:w-8 sm:h-8 text-primary-foreground" />
+            <div className="w-16 h-16 bg-primary rounded-[1.25rem] flex items-center justify-center mb-8 shadow-2xl shadow-primary/20">
+              <Trophy className="w-8 h-8 text-primary-foreground" />
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <span className="text-[10px] sm:text-xs font-bold text-primary uppercase tracking-[0.2em]">{currentTeam.team_name}</span>
-                <h2 className="text-2xl sm:text-3xl font-bold font-outfit tracking-tight leading-tight">
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h2 className="text-3xl sm:text-4xl font-bold font-outfit tracking-tight leading-[1.1]">
                   {currentTeam.project_title}
                 </h2>
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-primary uppercase tracking-widest">Team Members</p>
+                  <p className="text-sm sm:text-base font-medium text-foreground leading-relaxed">
+                    {currentTeam.team_name?.replace(/\r/g, '') || 'N/A'}
+                  </p>
+                </div>
               </div>
 
-              <div className="pt-4 border-t border-border/50">
-                <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+              <div className="pt-6 border-t border-border/50">
+                <h4 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
                   <Info className="w-4 h-4" />
-                  Project Description
+                  Description
                 </h4>
-                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                  {currentTeam.description || 'No description provided for this project.'}
+                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed italic">
+                  "{currentTeam.description || 'No description provided for this project.'}"
                 </p>
               </div>
 
               <div className="pt-4">
-                <div className="p-3 sm:p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl sm:rounded-2xl flex gap-3">
+                <div className="p-4 bg-yellow-500/5 border border-yellow-500/10 rounded-2xl flex gap-3">
                   <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
-                  <p className="text-[11px] sm:text-xs text-yellow-500/80 leading-relaxed font-medium">
-                    Scores for this team are final and cannot be edited after submission.
+                  <p className="text-xs text-yellow-500/80 leading-relaxed font-semibold">
+                    Note: Once you click "{isLastTeam ? 'Finalize' : 'Next Team'}", scores for this team will be locked.
                   </p>
                 </div>
               </div>
@@ -179,51 +214,68 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
         </div>
 
         {/* Right Column: Scoring Form */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-7">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass-card p-6 sm:p-10 rounded-[1.5rem] sm:rounded-[2.5rem] border border-border bg-card/50 shadow-2xl backdrop-blur-2xl"
+            className="glass-card p-8 sm:p-12 rounded-[2.5rem] border border-border bg-card/50 shadow-2xl backdrop-blur-2xl"
           >
-            <h3 className="text-xl sm:text-2xl font-bold font-outfit mb-6 sm:mb-8 flex items-center gap-3">
-              <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
-              Evaluation Criteria
-            </h3>
+            <div className="flex items-center mb-10">
+              <h3 className="text-2xl font-bold font-outfit flex items-center gap-3">
+                <ShieldCheck className="w-8 h-8 text-primary" />
+                Score Card
+              </h3>
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-8 sm:space-y-10">
-              <div className="space-y-6 sm:space-y-8">
+            <form onSubmit={handleSubmit} className="space-y-10">
+              <div className="space-y-10">
                 {criteria.map((criterion) => (
-                  <StarRating
-                    key={criterion.id}
-                    label={criterion.label}
-                    value={scores[criterion.name] || 0}
-                    onChange={(v) => setScores(s => ({ ...s, [criterion.name]: v }))}
-                    disabled={isSubmitting}
-                  />
+                  <div key={criterion.id} className="space-y-4">
+                    <StarRating
+                      label={criterion.label}
+                      value={scores[criterion.name] || 0}
+                      onChange={(v) => setScores(s => ({ ...s, [criterion.name]: v }))}
+                      disabled={isSubmitting}
+                    />
+                  </div>
                 ))}
               </div>
 
-              <div className="pt-6 sm:pt-8 border-t border-border">
+              <div className="pt-10 border-t border-border/50">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full flex items-center justify-center gap-3 py-4 sm:py-5 px-6 bg-primary text-primary-foreground font-bold rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 shadow-2xl shadow-primary/30 text-base sm:text-lg uppercase tracking-wider"
+                  className={`w-full flex items-center justify-center gap-3 py-5 px-8 font-black rounded-2xl transition-all active:scale-[0.98] disabled:opacity-50 shadow-2xl text-lg uppercase tracking-[0.15em] ${
+                    isLastTeam 
+                      ? 'bg-green-600 text-white shadow-green-600/20 hover:bg-green-700' 
+                      : 'bg-primary text-primary-foreground shadow-primary/30 hover:opacity-90'
+                  }`}
                 >
                   {isSubmitting ? (
                     <>
-                      <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
-                      Submitting...
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                      Processing...
                     </>
                   ) : (
                     <>
-                      Submit & Next
-                      <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                      {isLastTeam ? 'Finalize & Submit All' : 'Save & Next Team'}
+                      <ChevronRight className="w-6 h-6" />
                     </>
                   )}
                 </button>
-                <p className="text-center text-xs sm:text-sm text-muted-foreground mt-4">
-                  Team Progress: {assignment.current_team_index + 1} of {assignment.team_ids.length}
-                </p>
+                <div className="flex items-center justify-center gap-6 mt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total Weightage</span>
+                    <span className="text-sm font-bold">25 Points</span>
+                  </div>
+                  <div className="w-[1px] h-6 bg-border" />
+                  <div className="flex flex-col items-center">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Current Total</span>
+                    <span className="text-sm font-bold text-primary">
+                      {Object.values(scores).reduce((a, b) => a + b, 0)} / 25
+                    </span>
+                  </div>
+                </div>
               </div>
             </form>
           </motion.div>

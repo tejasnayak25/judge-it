@@ -99,14 +99,11 @@ export async function getResultsAction() {
       };
     });
 
-    // --- First Year (F): 1 from each batch ---
-    const fBatches = teamsByAssignment.filter(b => b.prefix === 'F');
-    fBatches.forEach(b => {
-      if (b.teams.length > 0) {
-        winners.F.push(b.teams[0]);
-        selectedIds.add(b.teams[0].team_id);
-      }
-    });
+    // --- First Year (F): Top 2 overall ---
+    const fTeams = judgedResults.filter(r => r.slot_number?.startsWith('F'));
+    fTeams.sort(tieBreaker);
+    winners.F = fTeams.slice(0, 2);
+    winners.F.forEach((w: any) => selectedIds.add(w.team_id));
 
     // --- Second Year (S): 1 from each batch ---
     const sBatches = teamsByAssignment.filter(b => b.prefix === 'S');

@@ -23,24 +23,32 @@ export async function getAssignmentsAction() {
   }
 }
 
-export async function createAssignmentAction(judgeIds: string[], teamIds: string[]) {
+export async function createAssignmentAction(judgeIds: string[], teamIds: string[], editId?: string) {
   try {
     await ensureAdmin();
-    const docRef = adminDb.collection('assignments').doc();
-    await docRef.set({
-      id: docRef.id,
-      judge_ids: judgeIds,
-      team_ids: teamIds,
-      revealed: false,
-      started: false,
-      current_team_index: 0,
-      created_at: new Date().toISOString(),
-    });
+    
+    if (editId) {
+      await adminDb.collection('assignments').doc(editId).update({
+        judge_ids: judgeIds,
+        team_ids: teamIds,
+      });
+    } else {
+      const docRef = adminDb.collection('assignments').doc();
+      await docRef.set({
+        id: docRef.id,
+        judge_ids: judgeIds,
+        team_ids: teamIds,
+        revealed: false,
+        started: false,
+        current_team_index: 0,
+        created_at: new Date().toISOString(),
+      });
+    }
 
     revalidatePath('/admin/assignments');
     return { success: true };
   } catch (error: any) {
-    console.error('Error creating assignment:', error);
+    console.error('Error in createAssignmentAction:', error);
     return { success: false, error: error.message };
   }
 }

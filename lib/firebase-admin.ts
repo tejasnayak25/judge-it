@@ -19,9 +19,13 @@ if (!admin.apps.length) {
 
       admin.initializeApp({
         credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/^"|"$/g, '').replace(/\\n/g, '\n'),
+          projectId: (process.env.FIREBASE_PROJECT_ID || '').trim(),
+          clientEmail: (process.env.FIREBASE_CLIENT_EMAIL || '').trim(),
+          privateKey: (process.env.FIREBASE_PRIVATE_KEY || '')
+            .replace(/^"|"$/g, '') // Remove start/end quotes
+            .replace(/\\n/g, '\n')  // Replace escaped newlines
+            .replace(/\n\s+/g, '\n') // Remove spaces after newlines
+            .trim(),
         }),
       });
       console.log('Firebase Admin initialized using environment variables');

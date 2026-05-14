@@ -4,7 +4,7 @@ import { adminDb } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { ensureJudge } from '@/lib/security';
 
-export async function getReviewStateAction(assignmentId: string) {
+export async function getReviewStateAction(assignmentId: string, targetIndex?: number) {
   try {
     const session = await ensureJudge();
     
@@ -19,40 +19,49 @@ export async function getReviewStateAction(assignmentId: string) {
       .get();
     const criteria = criteriaSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // 3. Calculate Current Team Dynamically for THIS Judge
-    // Fetch all reviews by this judge for this assignment
+    // 3. Fetch all reviews by this judge for this assignment to see progress
     const reviewsSnap = await adminDb.collection('reviews')
       .where('assignment_id', '==', assignmentId)
       .where('judge_id', '==', session.uid)
       .get();
     
-    const reviewedTeamIds = new Set(reviewsSnap.docs.map(doc => doc.data().team_id));
+    const reviewsMap = new Map();
+    reviewsSnap.docs.forEach(doc => {
+      reviewsMap.set(doc.data().team_id, doc.data().scores);
+    });
     
-    // Find first team in the list that hasn't been reviewed by this judge
-    let currentTeamIndex = 0;
-    let teamId = null;
-
-    for (let i = 0; i < assignment.team_ids.length; i++) {
-      if (!reviewedTeamIds.has(assignment.team_ids[i])) {
-        currentTeamIndex = i;
-        teamId = assignment.team_ids[i];
-        break;
+    // 4. Determine which team to show
+    let currentTeamIndex = targetIndex !== undefined ? targetIndex : 0;
+    
+    // If no target index, find first unreviewed
+    if (targetIndex === undefined) {
+      for (let i = 0; i < assignment.team_ids.length; i++) {
+        if (!reviewsMap.has(assignment.team_ids[i])) {
+          currentTeamIndex = i;
+          break;
+        }
       }
     }
 
-    if (!teamId) {
+    // Check if finished (if we are at the end and all are reviewed)
+    if (currentTeamIndex >= assignment.team_ids.length) {
       return { success: true, assignment: { ...assignment, current_team_index: assignment.team_ids.length }, criteria, team: null, finished: true };
     }
 
+    const teamId = assignment.team_ids[currentTeamIndex];
     const teamDoc = await adminDb.collection('teams').doc(teamId).get();
     if (!teamDoc.exists) throw new Error('Team not found');
     const team = { id: teamDoc.id, ...teamDoc.data() };
+
+    // Get existing scores for this team if any
+    const existingScores = reviewsMap.get(teamId) || null;
 
     return { 
       success: true, 
       assignment: { ...assignment, current_team_index: currentTeamIndex }, 
       criteria, 
       team, 
+      existingScores,
       finished: false 
     };
   } catch (error: any) {
@@ -73,18 +82,20 @@ export async function submitReviewAction(assignmentId: string, teamId: string, s
       throw new Error('Unauthorized: You are not assigned to this panel');
     }
 
-    // 1. Insert Review
-    const reviewRef = adminDb.collection('reviews').doc();
+    // 1. Upsert Review (use deterministic ID to overwrite if exists)
+    const reviewId = `${assignmentId}_${session.uid}_${teamId}`;
+    const reviewRef = adminDb.collection('reviews').doc(reviewId);
+    
     await reviewRef.set({
-      id: reviewRef.id,
+      id: reviewId,
       assignment_id: assignmentId,
       judge_id: session.uid,
       team_id: teamId,
       scores: scores,
       submitted_at: new Date().toISOString(),
-    });
+    }, { merge: true });
 
-    // 2. Check if finished (now based on review count for this judge)
+    // 2. Check if finished
     const reviewsSnap = await adminDb.collection('reviews')
       .where('assignment_id', '==', assignmentId)
       .where('judge_id', '==', session.uid)

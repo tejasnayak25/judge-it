@@ -55,6 +55,7 @@ export default function AssignmentsPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   
   // Selection state
   const [selectedJudge1, setSelectedJudge1] = useState('');
@@ -86,7 +87,22 @@ export default function AssignmentsPage() {
     }
   }
 
-  async function handleCreateAssignment() {
+  function handleOpenCreate() {
+    setEditingAssignment(null);
+    resetForm();
+    setIsModalOpen(true);
+  }
+
+  function handleOpenEdit(assignment: Assignment) {
+    setEditingAssignment(assignment);
+    setSelectedJudge1(assignment.judge_ids[0] || '');
+    setSelectedJudge2(assignment.judge_ids[1] || '');
+    setSelectedTeams(assignment.team_ids || []);
+    setFormError(null);
+    setIsModalOpen(true);
+  }
+
+  async function handleSaveAssignment() {
     if (!selectedJudge1 || !selectedJudge2) {
       setFormError('Please select both judges.');
       return;
@@ -104,7 +120,13 @@ export default function AssignmentsPage() {
     setFormError(null);
 
     try {
-      const result = await createAssignmentAction([selectedJudge1, selectedJudge2], selectedTeams);
+      let result;
+      if (editingAssignment) {
+        // Edit existing (logic in actions can handle updates)
+        result = await createAssignmentAction([selectedJudge1, selectedJudge2], selectedTeams, editingAssignment.id);
+      } else {
+        result = await createAssignmentAction([selectedJudge1, selectedJudge2], selectedTeams);
+      }
 
       if (result.success) {
         setIsModalOpen(false);
@@ -125,6 +147,7 @@ export default function AssignmentsPage() {
     setSelectedJudge2('');
     setSelectedTeams([]);
     setFormError(null);
+    setEditingAssignment(null);
   }
 
   const toggleTeamSelection = (teamId: string) => {
@@ -154,7 +177,7 @@ export default function AssignmentsPage() {
           <p className="text-muted-foreground">Orchestrate the competition by pairing judges with team batches.</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenCreate}
           className="flex items-center gap-2 px-6 py-3.5 bg-primary text-primary-foreground font-bold rounded-2xl hover:opacity-90 transition-all active:scale-95 shadow-xl shadow-primary/20"
         >
           <Plus className="w-5 h-5" />
@@ -165,7 +188,7 @@ export default function AssignmentsPage() {
       <Modal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        title="Configure Judging Slot"
+        title={editingAssignment ? "Edit Judging Slot" : "Configure Judging Slot"}
       >
         <div className="space-y-8 max-h-[80vh] overflow-auto pr-2 custom-scrollbar p-1">
           {/* Judge Selection Section */}
@@ -318,7 +341,7 @@ export default function AssignmentsPage() {
 
           <div className="pt-2">
             <button 
-              onClick={handleCreateAssignment}
+              onClick={handleSaveAssignment}
               disabled={isSubmitting || selectedTeams.length === 0 || !selectedJudge1 || !selectedJudge2}
               className="w-full py-5 px-6 bg-primary text-primary-foreground font-black rounded-2xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-3 shadow-2xl shadow-primary/30 text-lg uppercase tracking-wider"
             >
@@ -328,6 +351,11 @@ export default function AssignmentsPage() {
                 <>Select Teams</>
               ) : !selectedJudge1 || !selectedJudge2 ? (
                 <>Assign Both Judges</>
+              ) : editingAssignment ? (
+                <>
+                  Update Batch ({selectedTeams.length})
+                  <CheckCircle2 className="w-6 h-6" />
+                </>
               ) : (
                 <>
                   Finalize Batch ({selectedTeams.length})
@@ -435,7 +463,10 @@ export default function AssignmentsPage() {
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right">
-                    <ActionMenu onDelete={async () => { await deleteAssignmentAction(assignment.id); fetchData(); }} />
+                    <ActionMenu 
+                      onEdit={() => handleOpenEdit(assignment)}
+                      onDelete={async () => { await deleteAssignmentAction(assignment.id); fetchData(); }} 
+                    />
                   </td>
                 </tr>
               ))}
