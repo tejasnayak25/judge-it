@@ -43,26 +43,38 @@ export async function getReviewStateAction(assignmentId: string, targetIndex?: n
       }
     }
 
-    // Check if finished (if we are at the end and all are reviewed)
-    if (currentTeamIndex >= assignment.team_ids.length) {
+    // Skip missing teams
+    let team = null;
+    while (currentTeamIndex < assignment.team_ids.length) {
+      const teamId = assignment.team_ids[currentTeamIndex];
+      const teamDoc = await adminDb.collection('teams').doc(teamId).get();
+      if (teamDoc.exists) {
+        team = { id: teamDoc.id, ...teamDoc.data() };
+        break;
+      }
+      currentTeamIndex++;
+    }
+
+    // Check if finished (if we are at the end and no valid team found)
+    if (!team) {
       return { success: true, assignment: { ...assignment, current_team_index: assignment.team_ids.length }, criteria, team: null, finished: true };
     }
 
-    const teamId = assignment.team_ids[currentTeamIndex];
-    const teamDoc = await adminDb.collection('teams').doc(teamId).get();
-    if (!teamDoc.exists) throw new Error('Team not found');
-    const team = { id: teamDoc.id, ...teamDoc.data() };
-
     // Get existing scores for this team if any
-    const existingScores = reviewsMap.get(teamId) || null;
+    const existingScores = reviewsMap.get(team.id) || null;
 
     // 5. Fetch all teams basic info for dropdown
     const allTeams = await Promise.all(
-      assignment.team_ids.map(async (tId: string) => {
+      assignment.team_ids.map(async (tId: string, idx: number) => {
         const tDoc = await adminDb.collection('teams').doc(tId).get();
         if (tDoc.exists) {
           const data = tDoc.data();
-          return { id: tDoc.id, project_title: data?.project_title || 'Unknown', slot_number: data?.slot_number || 'N/A' };
+          return { 
+            id: tDoc.id, 
+            project_title: data?.project_title || 'Unknown', 
+            slot_number: data?.slot_number || 'N/A',
+            index: idx
+          };
         }
         return null;
       })

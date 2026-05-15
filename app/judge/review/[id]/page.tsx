@@ -170,9 +170,9 @@ export default function ReviewPage({ params }: { params: Promise<{ id: string }>
               disabled={isSubmitting}
               className="w-full px-3 py-2 bg-background border border-border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all font-bold text-sm truncate cursor-pointer shadow-sm hover:border-primary/50"
             >
-              {allTeams.map((t, idx) => (
-                <option key={t.id} value={idx}>
-                  Team {idx + 1}: {t.project_title} ({t.slot_number})
+              {allTeams.map((t) => (
+                <option key={t.id} value={t.index}>
+                  Team {t.index + 1}: {t.project_title} ({t.slot_number})
                 </option>
               ))}
             </select>
