@@ -11,10 +11,47 @@ export async function getAssignmentsAction() {
       .orderBy('created_at', 'desc')
       .get();
 
-    const data = snapshot.docs.map(doc => ({
+    const assignments = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    }));
+    })) as any[];
+
+    // Fetch all reviews and existing teams to calculate progress
+    const [reviewsSnap, teamsSnap] = await Promise.all([
+      adminDb.collection('reviews').get(),
+      adminDb.collection('teams').get()
+    ]);
+    
+    const allReviews = reviewsSnap.docs.map(doc => doc.data());
+    const existingTeamIds = new Set(teamsSnap.docs.map(doc => doc.id));
+
+    const data = assignments.map(a => {
+      const assignmentReviews = allReviews.filter(r => r.assignment_id === a.id);
+      
+      // Calculate how many teams in this assignment actually still exist
+      const validTeamIds = a.team_ids.filter((tid: string) => existingTeamIds.has(tid));
+      const validTeamCount = validTeamIds.length;
+      
+      const judgeProgress = a.judge_ids.map((jid: string) => {
+        const judgeReviews = assignmentReviews.filter(r => r.judge_id === jid);
+        return {
+          judge_id: jid,
+          count: judgeReviews.length,
+          completed: validTeamCount > 0 && judgeReviews.length >= validTeamCount
+        };
+      });
+
+      const allCompleted = judgeProgress.length > 0 && judgeProgress.every((jp: any) => jp.completed);
+      const anyStarted = judgeProgress.some((jp: any) => jp.count > 0);
+
+      return {
+        ...a,
+        judge_progress: judgeProgress,
+        all_completed: allCompleted,
+        any_started: anyStarted,
+        valid_team_count: validTeamCount
+      };
+    });
 
     return { success: true, data };
   } catch (error: any) {

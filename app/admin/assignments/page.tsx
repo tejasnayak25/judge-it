@@ -32,6 +32,14 @@ interface Assignment {
   started: boolean;
   current_team_index: number;
   created_at: string;
+  judge_progress?: {
+    judge_id: string;
+    count: number;
+    completed: boolean;
+  }[];
+  all_completed?: boolean;
+  any_started?: boolean;
+  valid_team_count?: number;
 }
 
 interface Profile {
@@ -440,26 +448,42 @@ export default function AssignmentsPage() {
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-2">
                       <div className={`w-2.5 h-2.5 rounded-full ${
-                        assignment.current_team_index >= 10 ? 'bg-green-500' : 
-                        assignment.started ? 'bg-blue-500 animate-pulse' : 
+                        assignment.all_completed ? 'bg-green-500' : 
+                        assignment.any_started ? 'bg-blue-500 animate-pulse' : 
                         'bg-muted-foreground/30'
                       }`} />
-                      <span className={`text-[10px] font-black tracking-widest uppercase ${
-                        assignment.current_team_index >= 10 ? 'text-green-500' : 
-                        assignment.started ? 'text-blue-500' : 
-                        'text-muted-foreground opacity-50'
-                      }`}>
-                        {assignment.current_team_index >= 10 ? (
-                          <span className="flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            COMPLETED
-                          </span>
-                        ) : assignment.started ? (
-                          `PROGRESS: ${assignment.current_team_index + 1} / 10`
-                        ) : (
-                          'PENDING START'
+                      <div className="flex flex-col gap-1">
+                        <span className={`text-[10px] font-black tracking-widest uppercase ${
+                          assignment.all_completed ? 'text-green-500' : 
+                          assignment.any_started ? 'text-blue-500' : 
+                          'text-muted-foreground opacity-50'
+                        }`}>
+                          {assignment.all_completed ? (
+                            <span className="flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              COMPLETED
+                            </span>
+                          ) : assignment.any_started ? (
+                            'IN PROGRESS'
+                          ) : (
+                            'PENDING START'
+                          )}
+                        </span>
+                        
+                        {assignment.any_started && !assignment.all_completed && (
+                          <div className="flex flex-col gap-0.5">
+                            {assignment.judge_progress?.map((jp, i) => {
+                              const judge = judges.find(j => j.id === jp.judge_id);
+                              return (
+                                <div key={jp.judge_id} className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground/70 whitespace-nowrap">
+                                  <div className={`w-1 h-1 rounded-full ${jp.completed ? 'bg-green-500' : 'bg-blue-500'}`} />
+                                  <span>{judge?.full_name?.split(' ')[0] || `Judge ${i+1}`}: {jp.count}/{assignment.valid_team_count ?? assignment.team_ids.length}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
-                      </span>
+                      </div>
                     </div>
                   </td>
                   <td className="px-8 py-6 text-right">
