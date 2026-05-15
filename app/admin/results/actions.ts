@@ -20,7 +20,12 @@ export async function getResultsAction() {
     const teams = teamsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
     const reviews = reviewsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
     const criteria = criteriaSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
-    const assignments = assignmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
+    
+    // Filter out grand finale assignments from this view
+    const assignments = assignmentsSnap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() as any }))
+      .filter(a => a.type !== 'grand_finale');
+
     const users = usersSnap.docs.reduce((acc: any, doc) => {
       acc[doc.id] = doc.data();
       return acc;
@@ -28,7 +33,23 @@ export async function getResultsAction() {
 
     // 2. Process results with detailed criteria scoring for tie-breaking
     const processedResults = teams.map((team: any) => {
-      const teamReviews = reviews.filter((r: any) => r.team_id === team.id);
+      // Find all assignments for this team (excluding grand finale which was filtered above)
+      const teamAssignments = assignments.filter((a: any) => a.team_ids.includes(team.id));
+      
+      // Sort by created_at (ascending) to pick the oldest one
+      teamAssignments.sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return timeA - timeB;
+      });
+
+      const oldestAssignment = teamAssignments[0];
+
+      // If one team is in multiple assignments, pick older one.
+      // Newer assignment is of grand finale (filtered above) or a subsequent round.
+      const teamReviews = oldestAssignment 
+        ? reviews.filter((r: any) => r.team_id === team.id && r.assignment_id === oldestAssignment.id)
+        : [];
 
       const judge_reviews = teamReviews.map((r: any) => {
         const total_score = Object.values(r.scores as Record<string, number>).reduce((a, b) => a + b, 0);
