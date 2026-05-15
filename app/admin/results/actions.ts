@@ -1,7 +1,7 @@
 'use server';
 
 import { adminDb } from '@/lib/firebase-admin';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, HeadingLevel, BorderStyle, WidthType } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, AlignmentType, HeadingLevel, BorderStyle, WidthType, VerticalAlign } from 'docx';
 import { ensureAdmin } from '@/lib/security';
 
 export async function getResultsAction() {
@@ -84,57 +84,23 @@ export async function getResultsAction() {
     const judgedResults = processedResults.filter(r => r.judge_reviews.length > 0);
     judgedResults.sort(tieBreaker);
 
-    // 4. Calculate Award Qualifiers based on Strict Quotas
+    // 4. Calculate Award Qualifiers based on Strict Quotas (2-5-3)
     const winners: any = { F: [], S: [], T: [] };
-    const selectedIds = new Set<string>();
 
-    // Group teams by assignment (batch)
-    const teamsByAssignment = assignments.map(a => {
-      const batchTeams = judgedResults.filter(r => a.team_ids.includes(r.team_id));
-      batchTeams.sort(tieBreaker);
-      return {
-        id: a.id,
-        prefix: batchTeams[0]?.slot_number?.charAt(0).toUpperCase() || '',
-        teams: batchTeams
-      };
-    });
-
-    // --- First Year (F): Top 2 overall ---
-    const fTeams = judgedResults.filter(r => r.slot_number?.startsWith('F'));
+    // --- First Year (F): Top 2 ---
+    const fTeams = judgedResults.filter(r => r.slot_number?.toUpperCase().startsWith('F'));
     fTeams.sort(tieBreaker);
     winners.F = fTeams.slice(0, 2);
-    winners.F.forEach((w: any) => selectedIds.add(w.team_id));
 
-    // --- Second Year (S): 1 from each batch ---
-    const sBatches = teamsByAssignment.filter(b => b.prefix === 'S');
-    sBatches.forEach(b => {
-      if (b.teams.length > 0) {
-        winners.S.push(b.teams[0]);
-        selectedIds.add(b.teams[0].team_id);
-      }
-    });
+    // --- Second Year (S): Top 5 ---
+    const sTeams = judgedResults.filter(r => r.slot_number?.toUpperCase().startsWith('S'));
+    sTeams.sort(tieBreaker);
+    winners.S = sTeams.slice(0, 5);
 
-    // --- Third Year (T): Top 1 from each batch (Max 2) + 1 next best overall ---
-    const tBatches = teamsByAssignment.filter(b => b.prefix === 'T');
-    
-    // Take Top 1 from first two T batches
-    tBatches.slice(0, 2).forEach(b => {
-      if (b.teams.length > 0) {
-        winners.T.push(b.teams[0]);
-        selectedIds.add(b.teams[0].team_id);
-      }
-    });
-
-    // Fill remaining T spots (to reach 3) from the general T pool
-    if (winners.T.length < 3) {
-      const remainingTTeams = judgedResults.filter(r => 
-        r.slot_number?.startsWith('T') && !selectedIds.has(r.team_id)
-      );
-      remainingTTeams.sort(tieBreaker);
-      
-      const needed = 3 - winners.T.length;
-      winners.T.push(...remainingTTeams.slice(0, needed));
-    }
+    // --- Third Year (T): Top 3 ---
+    const tTeams = judgedResults.filter(r => r.slot_number?.toUpperCase().startsWith('T'));
+    tTeams.sort(tieBreaker);
+    winners.T = tTeams.slice(0, 3);
 
     return {
       success: true,
@@ -152,11 +118,42 @@ export async function exportWinnersAction() {
   try {
     await ensureAdmin();
     const res = await getResultsAction();
-    if (!res.success) throw new Error(res.error);
+    if (!res.success || !res.winners) throw new Error(res.error || "No results found");
 
-    if (!res.results) throw new Error("No results found");
+    const winners = res.winners;
 
-    const top6 = res.results.slice(0, 6);
+    const createWinnerTable = (title: string, teams: any[], color: string) => {
+      const headerRow = new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Rank", bold: true, color: "ffffff" })] })], shading: { fill: color } }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Project Title", bold: true, color: "ffffff" })] })], shading: { fill: color } }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Team Name", bold: true, color: "ffffff" })] })], shading: { fill: color } }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Batch", bold: true, color: "ffffff" })] })], shading: { fill: color } }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Avg Score", bold: true, color: "ffffff" })] })], shading: { fill: color } }),
+        ],
+      });
+
+      const bodyRows = teams.map((team, index) => new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: (index + 1).toString(), bold: true })] }),], verticalAlign: VerticalAlign.CENTER }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: team.project_title, bold: true })] })] }),
+          new TableCell({ children: [new Paragraph(team.team_name)] }),
+          new TableCell({ children: [new Paragraph(team.slot_number)] }),
+          new TableCell({ children: [new Paragraph(team.average_score.toFixed(2))] }),
+        ],
+      }));
+
+      return [
+        new Paragraph({
+          children: [new TextRun({ text: title, bold: true, size: 28, color: color })],
+          spacing: { before: 400, after: 200 },
+        }),
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [headerRow, ...bodyRows],
+        }),
+      ];
+    };
 
     const doc = new Document({
       sections: [
@@ -166,9 +163,9 @@ export async function exportWinnersAction() {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "COMPETITION RESULTS",
+                  text: "COMPETITION WINNER SHEET",
                   bold: true,
-                  size: 32, // 16pt
+                  size: 40,
                 }),
               ],
               alignment: AlignmentType.CENTER,
@@ -177,44 +174,29 @@ export async function exportWinnersAction() {
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `Generated on: ${new Date().toLocaleDateString()}`,
+                  text: `Generated on: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}`,
                   italics: true,
-                  size: 20, // 10pt
+                  size: 20,
                 }),
               ],
               alignment: AlignmentType.CENTER,
               spacing: { after: 800 },
             }),
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Rank", bold: true })] })], shading: { fill: "f2f2f2" } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Team Name", bold: true })] })], shading: { fill: "f2f2f2" } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Project Title", bold: true })] })], shading: { fill: "f2f2f2" } }),
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Average Score", bold: true })] })], shading: { fill: "f2f2f2" } }),
-                  ],
-                }),
-                ...top6.map((team, index) => new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: (index + 1).toString(), bold: true })] })] }),
-                    new TableCell({ children: [new Paragraph(team.team_name)] }),
-                    new TableCell({ children: [new Paragraph(team.project_title)] }),
-                    new TableCell({ children: [new Paragraph(team.average_score.toFixed(2))] }),
-                  ],
-                })),
-              ],
-            }),
+
+            ...createWinnerTable("FIRST YEAR QUALIFIERS (TOP 2)", winners.F, "2563eb"), // blue-600
+            ...createWinnerTable("SECOND YEAR QUALIFIERS (TOP 5)", winners.S, "7c3aed"), // violet-600
+            ...createWinnerTable("THIRD YEAR QUALIFIERS (TOP 3)", winners.T, "059669"), // emerald-600
+
             new Paragraph({
               children: [
                 new TextRun({
-                  text: "Congratulations to all participants!",
+                  text: "Congratulations to all participants for their hard work and innovation!",
                   italics: true,
+                  size: 18,
                 }),
               ],
               alignment: AlignmentType.CENTER,
-              spacing: { before: 1000 },
+              spacing: { before: 1200 },
             }),
           ],
         },

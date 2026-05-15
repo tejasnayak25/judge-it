@@ -20,7 +20,7 @@ export default function ExportWinnersButton({ variant = 'default' }: { variant?:
         }
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-        
+
         // Trigger download
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -42,7 +42,7 @@ export default function ExportWinnersButton({ variant = 'default' }: { variant?:
 
   if (variant === 'compact') {
     return (
-      <button 
+      <button
         onClick={handleExport}
         disabled={loading}
         className="flex items-center gap-2 px-4 py-2.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-xl transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-yellow-500/20 text-sm"
@@ -54,7 +54,7 @@ export default function ExportWinnersButton({ variant = 'default' }: { variant?:
   }
 
   return (
-    <button 
+    <button
       onClick={handleExport}
       disabled={loading}
       className="w-full py-4 px-5 bg-gradient-to-br from-yellow-500 to-amber-600 text-black font-black rounded-2xl shadow-xl shadow-yellow-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-between group"
@@ -65,7 +65,7 @@ export default function ExportWinnersButton({ variant = 'default' }: { variant?:
         </div>
         <div className="text-left">
           <p className="text-sm font-black uppercase tracking-tight">Export Winner Sheet</p>
-          <p className="text-[10px] font-bold opacity-70">TOP 6 TEAMS (.DOCX)</p>
+          <p className="text-[10px] font-bold opacity-70">ROUND 1 WINNERS (.DOCX)</p>
         </div>
       </div>
       <Download className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
