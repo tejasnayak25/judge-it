@@ -13,6 +13,7 @@ import {
   Zap
 } from 'lucide-react';
 import { getFinaleResultsAction } from './actions';
+import ExportFinaleWinnersButton from '@/components/admin/ExportFinaleWinnersButton';
 
 export default function FinaleResultsPage() {
   const [results, setResults] = useState<any[]>([]);
@@ -61,13 +62,16 @@ export default function FinaleResultsPage() {
           </div>
           <p className="text-muted-foreground text-lg">Final leaderboard based on the Master Panel evaluations.</p>
         </div>
-        <button 
-          onClick={fetchResults}
-          className="flex items-center gap-2 px-6 py-3 bg-muted hover:bg-border rounded-xl transition-all font-bold text-sm"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh Standings
-        </button>
+        <div className="flex items-center gap-3">
+          <ExportFinaleWinnersButton />
+          <button 
+            onClick={fetchResults}
+            className="flex items-center gap-2 px-6 py-3 bg-muted hover:bg-border rounded-xl transition-all font-bold text-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh Standings
+          </button>
+        </div>
       </div>
 
       {/* Top 3 Podium */}
